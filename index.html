@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="description" content="Rapporte und Checklisten abhaken, ausfüllen und unterschreiben.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Rapport-Tool</title>
+<style>
+:root {
+  --bg: #e9ecf1; --bar: #ffffff; --line: #d5dae2; --text: #1d2430; --muted: #6b7482;
+  --accent: #1d4ed8; --accent-soft: #e3ebff; --ink: #14338c; --danger: #c62828; --ok: #1b7f3b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+body { display: flex; flex-direction: column; }
+
+/* ---------- Toolbar ---------- */
+#bar { display: flex; align-items: stretch; gap: 6px; padding: 6px 8px; background: var(--bar);
+  border-bottom: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.06); flex-wrap: wrap; z-index: 5; }
+.grp { display: flex; gap: 4px; align-items: stretch; padding-right: 6px; border-right: 1px solid var(--line); }
+.grp:last-child { border-right: 0; }
+.spacer { flex: 1; }
+.btn { min-width: 62px; height: 58px; padding: 4px 8px; border: 1px solid transparent; border-radius: 10px;
+  background: transparent; color: var(--text); font: inherit; font-size: 12px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px; cursor: pointer; }
+.btn svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn:hover { background: #f1f4f9; }
+.btn:active { background: #e4e9f1; }
+.btn.active { background: var(--accent-soft); border-color: #b8c9f5; color: var(--accent); font-weight: 600; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { background: #1a44c0; }
+.btn:disabled { opacity: .35; pointer-events: none; }
+.btn .big { font-size: 22px; line-height: 24px; font-weight: 700; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+#zoomLbl { min-width: 46px; font-size: 13px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+
+/* ---------- Tabs ---------- */
+#tabs { display: flex; gap: 4px; padding: 6px 10px 0; background: var(--bg); overflow-x: auto; }
+#tabs:empty { display: none; }
+.tab { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-radius: 10px 10px 0 0;
+  background: #d9dee6; color: var(--muted); font-size: 13px; cursor: pointer; white-space: nowrap; max-width: 360px; }
+.tab.active { background: #fff; color: var(--text); font-weight: 600; }
+.tab .nm { overflow: hidden; text-overflow: ellipsis; }
+.tab .dot { width: 8px; height: 8px; border-radius: 50%; background: #e08a00; display: none; }
+.tab.dirty .dot { display: block; }
+.tab .x { border: 0; background: transparent; font-size: 16px; color: var(--muted); cursor: pointer; padding: 0 4px; border-radius: 6px; }
+.tab .x:hover { background: rgba(0,0,0,.08); }
+
+/* ---------- Viewer ---------- */
+#viewer { flex: 1; position: relative; overflow: auto; touch-action: none; }
+.doc { padding: 16px 16px 120px; display: none; flex-direction: column; align-items: center; gap: 18px; min-width: min-content; }
+.doc.active { display: flex; }
+.page { position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.18); flex: none; }
+.page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.page svg.ov { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.page .pnum { position: absolute; top: -16px; right: 0; font-size: 11px; color: var(--muted); }
+.tin { position: absolute; border: 0; outline: 2px solid var(--accent); border-radius: 2px; background: rgba(255,255,255,.96);
+  font-family: Helvetica, Arial, sans-serif; padding: 0 2px; margin: 0; color: var(--ink); user-select: text; -webkit-user-select: text; touch-action: auto; }
+.tin.upper { text-transform: uppercase; }
+.selbox { position: absolute; border: 1.5px dashed var(--accent); pointer-events: none; }
+.selbox .h { position: absolute; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3); pointer-events: auto; }
+.selbox .h.rs { right: -13px; bottom: -13px; cursor: nwse-resize; }
+.selbox .h.del { right: -13px; top: -13px; background: var(--danger); color: #fff; font-size: 14px; line-height: 20px; text-align: center; font-weight: 700; cursor: pointer; }
+
+/* ---------- Empty state ---------- */
+#empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+#empty .card { pointer-events: auto; background: #fff; border-radius: 18px; padding: 36px 40px; max-width: 560px; text-align: center;
+  box-shadow: 0 6px 30px rgba(0,0,0,.08); border: 2px dashed #c4ccd8; }
+#empty h1 { margin: 0 0 8px; font-size: 24px; }
+#empty p { margin: 6px 0; color: var(--muted); line-height: 1.5; }
+#empty .open { margin-top: 18px; font-size: 18px; padding: 14px 28px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; cursor: pointer; font-family: inherit; }
+body.drag #empty .card { border-color: var(--accent); background: var(--accent-soft); }
+body.hasdoc #empty { display: none; }
+
+/* ---------- Signature modal ---------- */
+#sigModal { position: fixed; inset: 0; background: rgba(15,20,30,.55); display: none; align-items: center; justify-content: center; z-index: 20; }
+#sigModal.show { display: flex; }
+#sigModal .box { background: #fff; border-radius: 18px; padding: 16px; width: min(96vw, 1100px); box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+#sigModal .head { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 6px 10px; }
+#sigModal .head b { font-size: 18px; }
+#sigModal .head span { color: var(--muted); font-size: 13px; }
+#sigWrap { position: relative; height: min(46vh, 420px); border-radius: 12px; background: #fbfcfe; border: 1px solid var(--line); touch-action: none; overflow: hidden; }
+#sigCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+#sigWrap .base { position: absolute; left: 6%; right: 6%; top: 72%; border-top: 2px solid #c7ced9; pointer-events: none; }
+#sigWrap .xmark { position: absolute; left: 6%; top: calc(72% - 34px); font-size: 26px; color: #b5bdc9; pointer-events: none; }
+#sigWrap .hint { position: absolute; left: 0; right: 0; top: 78%; text-align: center; color: #a0a8b5; font-size: 14px; pointer-events: none; }
+#sigModal .foot { display: flex; gap: 10px; justify-content: space-between; padding-top: 12px; }
+#sigModal .foot button { font: inherit; font-size: 16px; padding: 12px 22px; border-radius: 12px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+#sigModal .foot .ok { background: var(--ok); color: #fff; border-color: var(--ok); font-weight: 600; }
+#sigModal .foot .ok:disabled { opacity: .4; }
+
+/* ---------- Toast / Banner ---------- */
+#toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px); background: #1f2733; color: #fff;
+  padding: 12px 20px; border-radius: 12px; font-size: 15px; opacity: 0; transition: .25s; pointer-events: none; z-index: 30; max-width: 90vw; text-align: center; }
+#toast.show { opacity: .96; transform: translateX(-50%) translateY(0); }
+#banner { position: fixed; top: 84px; left: 50%; transform: translateX(-50%); background: #fff7d6; border: 1px solid #f0d77a; color: #6b5200;
+  padding: 8px 14px; border-radius: 10px; font-size: 13px; display: none; z-index: 6; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+#banner.show { display: block; }
+@media (max-width: 1000px) { .btn { min-width: 50px; font-size: 10.5px; } }
+</style>
+</head>
+<body>
+<header id="bar">
+  <div class="grp">
+    <button class="btn" id="btnOpen" title="PDF öffnen (Strg+O)">
+      <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Öffnen</button>
+    <button class="btn primary" id="btnSave" title="Als PDF speichern (Strg+S)" disabled>
+      <svg viewBox="0 0 24 24"><path d="M5 3h11l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 1-2z"/><path d="M8 3v5h8V3M7 21v-7h10v7"/></svg>Speichern</button>
+  </div>
+  <div class="grp" id="tools">
+    <button class="btn tool active" data-tool="tap" title="Tippen: Kreise abhaken, Felder ausfüllen, Unterschrift">
+      <svg viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5a1.5 1.5 0 0 1 3 0V12m0-1a1.5 1.5 0 0 1 3 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.9-2.6L4.3 15a1.5 1.5 0 0 1 2.4-1.8L9 15"/></svg>Tippen</button>
+    <button class="btn tool" data-tool="x" title="X frei setzen (überall)">
+      <span class="big">✕</span>Frei-X</button>
+    <button class="btn tool" data-tool="text" title="Freien Text irgendwo platzieren">
+      <span class="big">T</span>Text</button>
+    <button class="btn tool" data-tool="pen" title="Mit dem Stift frei schreiben / zeichnen">
+      <svg viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>Stift</button>
+    <button class="btn tool" data-tool="erase" title="Radierer: tippe auf einen Eintrag, um ihn zu löschen">
+      <svg viewBox="0 0 24 24"><path d="M20 20H9L4 15a2 2 0 0 1 0-3l8-8a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-8 8"/><path d="M7 11l6 6"/></svg>Radierer</button>
+  </div>
+  <div class="grp">
+    <button class="btn" id="btnSign" title="Unterschrift erfassen" disabled>
+      <svg viewBox="0 0 24 24"><path d="M3 17c3-6 5-9 6-8s-3 8-1 9 4-6 6-5-1 4 1 4 3-2 5-2"/><path d="M3 21h18"/></svg>Unterschrift</button>
+    <button class="btn" id="btnAll" title="Alle Kreise im Dokument abhaken" disabled>
+      <svg viewBox="0 0 24 24"><path d="M4 6l2 2 3-3M4 13l2 2 3-3M4 20l2 2 3-3M13 7h8M13 14h8M13 21h8"/></svg>Alle abhaken</button>
+    <button class="btn" id="btnUndo" title="Rückgängig (Strg+Z)" disabled>
+      <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>Rückgängig</button>
+  </div>
+  <div class="grp">
+    <button class="btn" id="btnStyle" title="Zeichen zum Abhaken: X oder Haken"><span class="big" id="styleIcon">✕</span><span id="styleLbl">Zeichen: X</span></button>
+    <button class="btn" id="btnColor" title="Farbe wechseln"><span class="swatch" id="swatch"></span><span id="colorLbl">Blau</span></button>
+  </div>
+  <div class="spacer"></div>
+  <div class="grp">
+    <button class="btn" id="zoomOut" title="Verkleinern"><span class="big">−</span>Kleiner</button>
+    <div id="zoomLbl">–</div>
+    <button class="btn" id="zoomIn" title="Vergrössern"><span class="big">+</span>Grösser</button>
+    <button class="btn" id="zoomFit" title="Auf Breite einpassen">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Einpassen</button>
+  </div>
+</header>
+<nav id="tabs"></nav>
+<main id="viewer">
+  <div id="empty"><div class="card">
+    <h1>Rapport-Tool</h1>
+    <p>Rapport oder Checkliste öffnen – oder die PDF-Datei (auch direkt aus Outlook) hierher ziehen.</p>
+    <p>Kreise und Kästchen antippen zum Abhaken · Felder antippen und per Tastatur ausfüllen · Unterschrift auf der Linie antippen.</p>
+    <button class="open" id="btnOpen2">PDF öffnen</button>
+  </div></div>
+</main>
+
+<div id="sigModal">
+  <div class="box">
+    <div class="head"><b id="sigTitle">Unterschrift</b><span>Nur der Stift schreibt – die Hand darf aufliegen.</span></div>
+    <div id="sigWrap">
+      <div class="xmark">✕</div><div class="base"></div><div class="hint">Bitte hier auf der Linie unterschreiben</div>
+      <canvas id="sigCanvas"></canvas>
+    </div>
+    <div class="foot">
+      <div style="display:flex;gap:10px">
+        <button id="sigCancel">Abbrechen</button>
+        <button id="sigClear">Löschen</button>
+      </div>
+      <button class="ok" id="sigOk" disabled>Übernehmen</button>
+    </div>
+  </div>
+</div>
+<div id="banner"></div>
+<div id="toast"></div>
+<input type="file" id="fileInput" accept="application/pdf,.pdf" multiple hidden>
+
+<script src="lib/pdf.min.js"></script>
+<script>
+  // Als Datei (file://) geöffnet: Browser erlaubt keinen Worker → PDF-Engine im Hauptthread laden
+  if (location.protocol === 'file:') document.write('<script src="lib/pdf.worker.min.js"><\/script>');
+</script>
+<script src="lib/pdf-lib.min.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const viewer = $('#viewer');
+const COLORS = {
+  blue:  { css: '#14338c', rgb: [0.078, 0.2, 0.55], name: 'Blau' },
+  black: { css: '#111111', rgb: [0.07, 0.07, 0.07], name: 'Schwarz' },
+};
+const OPEN_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '☐', '□', '❏', '❑', '◻', '⬜', '', '', '', '', '']);
+const CIRCLE_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '', '']);
+const CHECKED_GLYPHS = new Set(['☒', '☑', '✓', '✔', '⊠', '', '', '']);
+const LS_PREFIX = 'rapport-tool:';
+
+const state = {
+  docs: [], active: null, tool: 'tap', markStyle: 'x', color: 'blue',
+  penSeen: false, lastPen: 0, penDown: false, sel: null, pendingSig: null, editing: null,
+};
+try {
+  const pref = JSON.parse(localStorage.getItem(LS_PREFIX + 'prefs') || '{}');
+  if (pref.markStyle) state.markStyle = pref.markStyle;
+  if (pref.color && COLORS[pref.color]) state.color = pref.color;
+} catch (e) {}
+function savePrefs() { try { localStorage.setItem(LS_PREFIX + 'prefs', JSON.stringify({ markStyle: state.markStyle, color: state.color })); } catch (e) {} }
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+
+/* ================= Hilfen ================= */
+let toastTimer;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+function banner(msg) {
+  const b = $('#banner');
+  if (msg) { b.textContent = msg; b.style.top = ($('#bar').offsetHeight + ($('#tabs').offsetHeight || 0) + 10) + 'px'; b.classList.add('show'); }
+  else b.classList.remove('show');
+}
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const mctx = document.createElement('canvas').getContext('2d');
+function textWidth(s, size) { mctx.font = `${size}px Helvetica, Arial, sans-serif`; return mctx.measureText(s).width; }
+function today() { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; }
+function doc() { return state.active; }
+function capture(el, id) { try { el.setPointerCapture(id); } catch (e) {} }
+
+/* ================= Öffnen ================= */
+async function pickFiles() {
+  if (window.showOpenFilePicker) {
+    try {
+      const hs = await showOpenFilePicker({ multiple: true, startIn: 'desktop', types: [{ description: 'PDF-Dokument', accept: { 'application/pdf': ['.pdf'] } }] });
+      for (const h of hs) { const f = await h.getFile(); await loadDoc(f, h); }
+      return;
+    } catch (e) { if (e.name === 'AbortError') return; console.warn(e); }
+  }
+  $('#fileInput').click();
+}
+$('#fileInput').addEventListener('change', async e => { for (const f of e.target.files) await loadDoc(f, null); e.target.value = ''; });
+$('#btnOpen').onclick = pickFiles; $('#btnOpen2').onclick = pickFiles;
+
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drag'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('drag'); });
+document.addEventListener('drop', async e => {
+  e.preventDefault(); document.body.classList.remove('drag');
+  const items = [...(e.dataTransfer.items || [])];
+  const entries = [];
+  for (const it of items) {
+    if (it.kind !== 'file') continue;
+    let h = null;
+    if (it.getAsFileSystemHandle) { try { h = await it.getAsFileSystemHandle(); } catch (err) {} }
+    entries.push({ file: it.getAsFile(), handle: h && h.kind === 'file' ? h : null });
+  }
+  for (const en of entries) if (en.file && /\.pdf$/i.test(en.file.name)) await loadDoc(en.file, en.handle);
+});
+
+async function loadDoc(file, handle, fromLaunch = false) {
+  const existing = state.docs.find(d => d.name === file.name && d.size === file.size);
+  if (existing) { activate(existing); toast('Diese Datei ist schon offen.'); return; }
+  toast('Öffne ' + file.name + ' …', 1500);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let pdf;
+  try { pdf = await pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise; }
+  catch (e) { console.error(e); toast('Die Datei konnte nicht geöffnet werden: ' + file.name, 4000); return; }
+  const d = { id: uid(), name: file.name, size: file.size, bytes, handle, fromLaunch, pdf, pages: [], annots: [], undo: [], dirty: false, scale: 1, fit: true, fields: [] };
+  d.key = LS_PREFIX + d.name + '|' + d.size;
+  d.el = document.createElement('div'); d.el.className = 'doc'; viewer.appendChild(d.el);
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const vp1 = page.getViewport({ scale: 1 });
+    const p = { i: i - 1, page, vp1, w: vp1.width, h: vp1.height, targets: [], fields: [], sigTargets: [] };
+    p.el = document.createElement('div'); p.el.className = 'page';
+    p.canvas = document.createElement('canvas');
+    p.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); p.svg.setAttribute('class', 'ov');
+    p.svg.setAttribute('viewBox', `0 0 ${p.w} ${p.h}`); p.svg.setAttribute('preserveAspectRatio', 'none');
+    const num = document.createElement('div'); num.className = 'pnum'; num.textContent = `Seite ${i} / ${pdf.numPages}`;
+    p.el.append(p.canvas, p.svg, num); d.el.appendChild(p.el);
+    d.pages.push(p);
+  }
+  state.docs.push(d);
+  activate(d);
+  // Analyse der Seiten (Kreise, Felder, Unterschriftslinien)
+  for (const p of d.pages) { try { await analyzePage(d, p); } catch (e) { console.warn('Analyse fehlgeschlagen', e); } drawOverlay(d, p); }
+  d.fields = d.pages.flatMap(p => p.fields);
+  // Frühere, nicht gespeicherte Bearbeitung?
+  try {
+    const saved = JSON.parse(localStorage.getItem(d.key) || 'null');
+    if (saved && saved.annots && saved.annots.length) {
+      const when = new Date(saved.t).toLocaleString('de-CH');
+      if (confirm(`Für „${d.name}“ gibt es eine nicht gespeicherte Bearbeitung (${when}).\n\nWiederherstellen?`)) {
+        d.annots = saved.annots; d.dirty = true;
+      } else localStorage.removeItem(d.key);
+    }
+  } catch (e) {}
+  redrawAll(d); updateUI();
+  const nT = d.pages.reduce((s, p) => s + p.targets.filter(t => !t.pre).length, 0);
+  const nF = d.fields.length, nS = d.pages.reduce((s, p) => s + p.sigTargets.length, 0);
+  toast(`${nT} Kreise/Kästchen · ${nF} Textfelder · ${nS} Unterschrift${nS === 1 ? '' : 'en'} erkannt`, 3500);
+}
+
+/* ================= Tabs ================= */
+function renderTabs() {
+  const nav = $('#tabs'); nav.innerHTML = '';
+  for (const d of state.docs) {
+    const t = document.createElement('div');
+    t.className = 'tab' + (d === state.active ? ' active' : '') + (d.dirty ? ' dirty' : '');
+    t.innerHTML = `<span class="dot"></span><span class="nm">${esc(d.name.replace(/\.pdf$/i, ''))}</span><button class="x" title="Schliessen">✕</button>`;
+    t.onclick = e => { if (e.target.classList.contains('x')) closeDoc(d); else activate(d); };
+    nav.appendChild(t);
+  }
+}
+function activate(d) {
+  commitEdit();
+  if (state.active) { state.active.scrollTop = viewer.scrollTop; state.active.el.classList.remove('active'); }
+  state.active = d; state.sel = null;
+  if (d) {
+    d.el.classList.add('active');
+    if (d.fit) fitZoom(d, false);
+    renderAll(d);
+    viewer.scrollTop = d.scrollTop || 0;
+  }
+  document.body.classList.toggle('hasdoc', !!d);
+  renderTabs(); updateUI();
+}
+function closeDoc(d) {
+  if (d.dirty && !confirm(`„${d.name}“ wurde noch nicht gespeichert.\n\nTrotzdem schliessen? (Die Bearbeitung bleibt zwischengespeichert.)`)) return;
+  const idx = state.docs.indexOf(d);
+  state.docs.splice(idx, 1); d.el.remove(); d.pdf.destroy();
+  if (state.active === d) { state.active = null; activate(state.docs[Math.min(idx, state.docs.length - 1)] || null); }
+  else renderTabs();
+}
+
+/* ================= Rendern ================= */
+function fitZoom(d, rerender = true) {
+  const maxW = Math.max(...d.pages.map(p => p.w));
+  d.scale = Math.max(0.3, (viewer.clientWidth - 50) / maxW);
+  d.fit = true;
+  if (rerender) renderAll(d);
+}
+function setZoom(d, s) {
+  const center = (viewer.scrollTop + viewer.clientHeight / 2) / viewer.scrollHeight;
+  d.scale = Math.min(5, Math.max(0.3, s)); d.fit = false; renderAll(d);
+  viewer.scrollTop = center * viewer.scrollHeight - viewer.clientHeight / 2;
+}
+function renderAll(d) {
+  commitEdit();
+  for (const p of d.pages) {
+    p.el.style.width = p.w * d.scale + 'px'; p.el.style.height = p.h * d.scale + 'px';
+    renderCanvas(d, p);
+  }
+  redrawAll(d);
+  $('#zoomLbl').textContent = Math.round(d.scale * 100) + '%';
+}
+async function renderCanvas(d, p) {
+  const dpr = window.devicePixelRatio || 1;
+  const s = d.scale * dpr;
+  if (p.renderedAt === s) return;
+  if (p.task) { try { p.task.cancel(); } catch (e) {} }
+  const vp = p.page.getViewport({ scale: s });
+  const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  p.task = p.page.render({ canvasContext: c.getContext('2d'), viewport: vp });
+  try {
+    await p.task.promise;
+    p.canvas.width = c.width; p.canvas.height = c.height; p.canvas.getContext('2d').drawImage(c, 0, 0);
+    p.renderedAt = s;
+  } catch (e) { /* abgebrochen */ }
+}
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { const d = doc(); if (d && d.fit) fitZoom(d); }, 200); });
+
+/* ================= Seitenanalyse ================= */
+async function analyzePage(d, p) {
+  // Pixelbild in 2x Auflösung für die Feinanalyse
+  const S = 2;
+  const vp = p.page.getViewport({ scale: S });
+  const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  await p.page.render({ canvasContext: c.getContext('2d'), viewport: vp, intent: 'print' }).promise; // 'print' läuft auch ohne sichtbares Fenster
+  const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  const W = img.width, H = img.height, px = img.data;
+  const dark = (x, y) => {
+    x = Math.round(x * S); y = Math.round(y * S);
+    if (x < 0 || y < 0 || x >= W || y >= H) return false;
+    const i = (y * W + x) * 4;
+    return px[i + 3] > 40 && px[i] + px[i + 1] + px[i + 2] < 420;
+  };
+  const darkBox = (x0, y0, x1, y1) => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let y = y0; y <= y1; y += 1 / S) for (let x = x0; x <= x1; x += 1 / S) {
+      if (dark(x, y)) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+    }
+    return minX === Infinity ? null : { x0: minX, y0: minY, x1: maxX, y1: maxY };
+  };
+  // Vertikale Linie (Tabellenrand) rechts vom Startpunkt suchen
+  const scanBorder = (x0, top, bot, xmax) => {
+    for (let x = x0; x < xmax; x += 1 / S) {
+      let n = 0, k = 0;
+      for (let y = top; y <= bot; y += 1 / S) { k++; if (dark(x, y)) n++; }
+      if (k && n / k >= 0.5) return x - 4; // auch gestrichelte Linien
+    }
+    return xmax;
+  };
+
+  const tc = await p.page.getTextContent();
+  const items = [];
+  for (const it of tc.items) {
+    if (typeof it.str !== 'string' || !it.str.length) continue;
+    const t = pdfjsLib.Util.transform(p.vp1.transform, it.transform);
+    if (Math.abs(t[1]) > 0.01 || Math.abs(t[2]) > 0.01) continue; // nur waagrechter Text
+    const size = Math.abs(t[3]);
+    if (size < 3) continue;
+    items.push({ str: it.str, s: it.str.trim(), x: t[4], base: t[5], size, w: it.width, top: t[5] - size * 0.8, bot: t[5] + size * 0.22 });
+  }
+  // PDF.js zerlegt Zeilen oft in kleine Stücke („MA“ „-“ „Namen:“) → nahe Stücke wieder zusammenfügen
+  const isGlyph = a => OPEN_GLYPHS.has(a.s) || CHECKED_GLYPHS.has(a.s);
+  const real = [];
+  for (const a of items) {
+    if (!a.s) continue;
+    const r = real[real.length - 1];
+    const gap = r ? a.x - (r.x + r.w) : 0;
+    if (r && !isGlyph(a) && !isGlyph(r) && Math.abs(a.base - r.base) < 1.5 && Math.abs(a.size - r.size) < 1.5 && gap > -1 && gap < a.size * 0.5) {
+      r.str = r.str.replace(/\s+$/, '') + (gap > a.size * 0.15 ? ' ' : '') + a.str.replace(/^\s+/, '');
+      r.w = a.x + a.w - r.x; r.s = r.str.trim();
+    } else {
+      const lead = a.str.length - a.str.trimStart().length;
+      const lo = lead ? textWidth(a.str.slice(0, lead), a.size) * (a.w / (textWidth(a.str, a.size) || 1)) : 0;
+      real.push({ ...a, str: a.str.slice(lead), x: a.x + lo, w: a.w - lo });
+    }
+  }
+  for (const r of real) r.w = Math.max(r.w, 0.1);
+  const sameLine = (a, b) => { const ov = Math.min(a.bot, b.bot) - Math.max(a.top, b.top); return ov > 0.4 * Math.min(a.bot - a.top, b.bot - b.top); };
+  const nextOnLine = a => { let best = null; for (const b of real) if (b !== a && sameLine(a, b) && b.x >= a.x + a.w - 1.5 && (!best || b.x < best.x)) best = b; return best; };
+  const prevOnLine = a => { let best = null; for (const b of real) if (b !== a && sameLine(a, b) && b.x + b.w <= a.x + 1.5 && (!best || b.x > best.x)) best = b; return best; };
+
+  // ---- Kreise / Kästchen ----
+  const addTarget = (a, glyph, gx, gw) => {
+    const pre = CHECKED_GLYPHS.has(glyph);
+    const bb = darkBox(gx - 0.5, a.base - a.size * 0.95, gx + gw + 0.5, a.base + a.size * 0.2);
+    let cx, cy, r;
+    if (bb && bb.x1 - bb.x0 > 1.5 && bb.x1 - bb.x0 < a.size * 1.6) { cx = (bb.x0 + bb.x1) / 2; cy = (bb.y0 + bb.y1) / 2; r = Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0) / 2; }
+    else { cx = gx + gw / 2; cy = a.base - a.size * 0.33; r = a.size * 0.3; }
+    p.targets.push({ id: `t${p.i}_${p.targets.length}`, cx, cy, r, kind: CIRCLE_GLYPHS.has(glyph) ? 'circle' : 'box', pre });
+  };
+  for (const a of real) {
+    const g = a.s;
+    if (OPEN_GLYPHS.has(g) || CHECKED_GLYPHS.has(g)) {
+      if (g === 'o') { // Word-Aufzählungszeichen „o“: muss vor Text stehen und darf nicht Teil eines Wortes sein
+        const n = nextOnLine(a), pv = prevOnLine(a);
+        if (!n || n.x - (a.x + a.w) > 45 || n.x - (a.x + a.w) < 1.5) continue;
+        if (pv && a.x - (pv.x + pv.w) < 3) continue;
+      }
+      addTarget(a, g, a.x, a.w / a.str.length * (g.length || 1));
+    } else {
+      // Symbol am Zeilenanfang im gleichen Textstück, z. B. „☐ Text“
+      const m = /^(\s*)([☐□❏❍○◯☒☑])\s/.exec(a.str);
+      if (m) { const cw = a.size * 0.9; addTarget(a, m[2], a.x + textWidth(m[1], a.size), cw); }
+    }
+  }
+
+  // ---- Unterstrich-Linien „_____“ ----
+  const fields = [], sigs = [];
+  for (const a of real) {
+    const re = /_{4,}/g; let m;
+    while ((m = re.exec(a.str))) {
+      const ratio = a.w / (textWidth(a.str, a.size) || 1);
+      const xs = a.x + textWidth(a.str.slice(0, m.index), a.size) * ratio;
+      const ws = textWidth(m[0], a.size) * ratio;
+      let label = a.str.slice(0, m.index).trim();
+      if (!label) {
+        const below = real.find(b => b !== a && b.top > a.base - 1 && b.top < a.base + a.size * 2.4 && b.x < xs + ws && b.x + b.w > xs && !/_{4,}/.test(b.s));
+        if (below) label = below.s;
+      }
+      label = label.replace(/[:.]\s*$/, '');
+      if (/unterschrift|visum/i.test(label)) sigs.push({ x: xs, w: ws, lineY: a.base + 1, label });
+      else fields.push(mkField(xs + 2, a.base - 1.5, ws - 4, Math.min(a.size, 11), label));
+    }
+  }
+  // ---- Beschriftungen „Arbeitszeit:“ mit freiem Platz dahinter ----
+  // Spalten, in denen bestehende Werte beginnen (z. B. ein Name nach „MA-Namen:“) → neue Einträge bündig ausrichten
+  const valueCols = [];
+  for (const a of real) if (a.s.endsWith(':')) { const n = nextOnLine(a); if (n && !n.s.endsWith(':') && !isGlyph(n)) valueCols.push(n.x); }
+  for (const a of real) {
+    const s = a.s;
+    if (!s.endsWith(':') || s.includes('_') || a.size > 12.6 || s.length > 45 || s.length < 3) continue;
+    // Überschrift einer Aufzählung („Nutzen der Reinigung:“ gefolgt von „- …“) ist kein Feld
+    if (real.some(b => b.top > a.base && b.top < a.base + a.size * 2 && /^[-•–o]$|^[-•–]\s/.test(b.s) && b.x <= a.x + a.w)) continue;
+    let start = a.x + a.w + 3;
+    const n = nextOnLine(a);
+    let end;
+    if (n) {
+      const ns = n.s;
+      if (OPEN_GLYPHS.has(ns) || CHECKED_GLYPHS.has(ns)) continue;
+      if (!ns.endsWith(':')) {
+        if (/(…|\.\.\.)$/.test(ns)) { start = n.x + n.w + 4; const n2 = nextOnLine(n); end = n2 ? n2.x - 6 : p.w - 34; }
+        else continue; // Wert steht schon da
+      } else end = n.x - 8;
+    } else end = p.w - 34;
+    end = Math.min(end, scanBorder(start, a.base - a.size * 0.75, a.base + a.size * 0.15, end));
+    const col = valueCols.filter(x => x >= start && x < start + 50 && x < end - 40).sort((u, v) => u - v)[0];
+    if (col) start = col;
+    const label = s.replace(/:$/, '').trim();
+    if (/unterschrift|visum/i.test(label)) { if (end - start > 60) sigs.push({ x: start, w: end - start, lineY: a.base + 2, label }); continue; }
+    if (end - start < 40) continue;
+    const f = mkField(start, a.base, end - start, Math.min(a.size, 11), label);
+    if (!fields.some(o => overlaps(o, f))) fields.push(f);
+  }
+  function mkField(x, base, w, size, label) {
+    return { id: `f${p.i}_${uid()}`, page: p.i, x, base, w, size, label, date: /datum/i.test(label), upper: /blockschrift/i.test(label) };
+  }
+  function overlaps(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && Math.abs(a.base - b.base) < Math.max(a.size, b.size); }
+  fields.sort((a, b) => (Math.abs(a.base - b.base) < 4 ? a.x - b.x : a.base - b.base));
+  p.fields = fields;
+  p.sigTargets = sigs.map((s, k) => ({ ...s, id: `s${p.i}_${k}`, page: p.i }));
+}
+
+/* ================= Overlay zeichnen ================= */
+function redrawAll(d) { for (const p of d.pages) drawOverlay(d, p); drawSelection(d); renderTabs(); updateUI(); }
+function markPath(a) {
+  const h = a.h;
+  if (a.style === 'check') return `M${a.cx - h * 0.95},${a.cy + h * 0.05} L${a.cx - h * 0.3},${a.cy + h * 0.75} L${a.cx + h * 1.05},${a.cy - h * 1.05}`;
+  return `M${a.cx - h},${a.cy - h} L${a.cx + h},${a.cy + h} M${a.cx + h},${a.cy - h} L${a.cx - h},${a.cy + h}`;
+}
+function strokePath(pts) {
+  if (!pts.length) return '';
+  if (pts.length < 3) return `M${pts[0][0]},${pts[0][1]} ` + pts.map(q => `L${q[0]},${q[1]}`).join(' ') + (pts.length === 1 ? ' l0.01,0' : '');
+  let s = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) { const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2; s += ` Q${pts[i][0]},${pts[i][1]} ${mx},${my}`; }
+  const l = pts[pts.length - 1]; return s + ` L${l[0]},${l[1]}`;
+}
+function sigPts(a, st) { return st.map(q => [a.x + q[0] * a.w, a.y + q[1] * a.h]); }
+function drawOverlay(d, p) {
+  const out = [];
+  const my = d.annots.filter(a => a.page === p.i);
+  const marked = new Set(my.filter(a => a.type === 'mark' && a.target).map(a => a.target));
+  const filled = new Set(my.filter(a => a.type === 'text' && a.field && a.text).map(a => a.field));
+  const signed = new Set(my.filter(a => a.type === 'sig' && a.target).map(a => a.target));
+  const showHints = state.tool === 'tap' || state.tool === 'text';
+  // Hinweise (werden nicht gespeichert)
+  if (showHints) {
+    for (const t of p.targets) if (!t.pre && !marked.has(t.id))
+      out.push(`<circle cx="${t.cx}" cy="${t.cy}" r="${t.r + 2.6}" fill="rgba(29,78,216,.07)" stroke="rgba(29,78,216,.45)" stroke-width=".7"/>`);
+    for (const f of p.fields) if (!filled.has(f.id) && state.editing?.fieldId !== f.id)
+      out.push(`<rect x="${f.x - 1}" y="${f.base - f.size * 1.05}" width="${f.w}" height="${f.size * 1.4}" rx="1.5" fill="rgba(29,78,216,.06)" stroke="rgba(29,78,216,.35)" stroke-width=".5" stroke-dasharray="2 1.5"/>`);
+    for (const s of p.sigTargets) if (!signed.has(s.id))
+      out.push(`<rect x="${s.x}" y="${s.lineY - 34}" width="${s.w}" height="36" rx="3" fill="rgba(250,190,20,.13)" stroke="rgba(200,140,0,.5)" stroke-width=".6" stroke-dasharray="3 2"/>` +
+        `<text x="${s.x + s.w / 2}" y="${s.lineY - 14}" font-size="8" text-anchor="middle" fill="rgba(140,100,0,.8)" font-family="Segoe UI, sans-serif">✍ Antippen zum Unterschreiben</text>`);
+  }
+  for (const a of my) {
+    const col = COLORS[a.color || 'blue'].css;
+    if (a.type === 'mark') out.push(`<path d="${markPath(a)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+    else if (a.type === 'text' && a.text && state.editing?.annot !== a)
+      out.push(`<text x="${a.x}" y="${a.base}" font-size="${a.size}" fill="${col}" font-family="Helvetica, Arial, sans-serif" style="white-space:pre">${esc(a.text)}</text>`);
+    else if (a.type === 'ink') out.push(`<path d="${strokePath(a.pts)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+    else if (a.type === 'sig') for (const st of a.strokes) out.push(`<path d="${strokePath(sigPts(a, st))}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+  }
+  if (p.live) out.push(`<path id="live" d="${strokePath(p.live.pts)}" stroke="${COLORS[state.color].css}" stroke-width="${p.live.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+  p.svg.innerHTML = out.join('');
+}
+function drawSelection(d) {
+  document.querySelectorAll('.selbox').forEach(e => e.remove());
+  const a = state.sel && d.annots.find(x => x.id === state.sel);
+  if (!a || a.type !== 'sig') return;
+  const p = d.pages[a.page], s = d.scale;
+  const b = document.createElement('div'); b.className = 'selbox';
+  Object.assign(b.style, { left: (a.x - 3) * s + 'px', top: (a.y - 3) * s + 'px', width: (a.w + 6) * s + 'px', height: (a.h + 6) * s + 'px' });
+  b.innerHTML = '<div class="h del" title="Unterschrift löschen">✕</div><div class="h rs" title="Grösse ändern"></div>';
+  p.el.appendChild(b);
+}
+
+/* ================= Änderungen / Rückgängig ================= */
+function pushUndo(d) { d.undo.push(JSON.stringify(d.annots)); if (d.undo.length > 200) d.undo.shift(); }
+function changed(d) {
+  d.dirty = true; redrawAll(d);
+  clearTimeout(d.saveTimer);
+  d.saveTimer = setTimeout(() => { try { localStorage.setItem(d.key, JSON.stringify({ t: Date.now(), annots: d.annots })); } catch (e) {} }, 400);
+}
+function undo() {
+  const d = doc(); if (!d || !d.undo.length) return;
+  commitEdit(); d.annots = JSON.parse(d.undo.pop()); state.sel = null; changed(d);
+}
+function updateUI() {
+  const d = doc();
+  $('#btnSave').disabled = !d; $('#btnSign').disabled = !d; $('#btnAll').disabled = !d;
+  $('#btnUndo').disabled = !d || !d.undo.length;
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === state.tool));
+  $('#styleIcon').textContent = state.markStyle === 'x' ? '✕' : '✓';
+  $('#styleLbl').textContent = state.markStyle === 'x' ? 'Zeichen: X' : 'Zeichen: ✓';
+  $('#swatch').style.background = COLORS[state.color].css; $('#colorLbl').textContent = COLORS[state.color].name;
+  const b = { pen: 'Stift-Modus: Nur der Stift schreibt. Mit dem Finger kannst du weiterhin scrollen.', x: 'Frei-X: Tippe irgendwo hin, um ein X zu setzen.', text: 'Text: Tippe irgendwo hin, um freien Text zu schreiben.', erase: 'Radierer: Tippe auf einen Eintrag (oder streiche darüber), um ihn zu löschen.' }[state.tool];
+  banner(d && !state.pendingSig ? b : (state.pendingSig ? 'Tippe auf die Stelle, wo die Unterschrift hin soll.' : null));
+}
+
+/* ================= Aktionen ================= */
+function toggleMark(d, p, t) {
+  pushUndo(d);
+  const ex = d.annots.find(a => a.type === 'mark' && a.target === t.id && a.page === p.i);
+  if (ex) d.annots.splice(d.annots.indexOf(ex), 1);
+  else d.annots.push(newMark(p.i, t.cx, t.cy, t.kind === 'circle' ? Math.max(t.r * 1.2, 3.8) : Math.max(t.r * 0.8, 3.2), t.id));
+  changed(d);
+}
+function newMark(page, cx, cy, h, target) {
+  return { id: uid(), type: 'mark', page, cx, cy, h, target: target || null, style: state.markStyle, color: state.color, sw: 1.25 };
+}
+function checkAll() {
+  const d = doc(); if (!d) return;
+  const todo = [];
+  for (const p of d.pages) for (const t of p.targets) if (t.kind === 'circle' && !t.pre && !d.annots.some(a => a.type === 'mark' && a.target === t.id)) todo.push([p, t]);
+  if (!todo.length) { toast('Alle Kreise sind schon abgehakt.'); return; }
+  if (!confirm(`${todo.length} Kreise als erledigt abhaken?`)) return;
+  pushUndo(d);
+  for (const [p, t] of todo) d.annots.push(newMark(p.i, t.cx, t.cy, Math.max(t.r * 1.2, 3.8), t.id));
+  changed(d); toast(`${todo.length} Kreise abgehakt ✓`);
+}
+
+/* ---------- Text bearbeiten ---------- */
+function editText(d, p, opts) {
+  commitEdit();
+  let a = opts.annot;
+  const f = opts.field || (a && a.field && p.fields.find(x => x.id === a.field));
+  if (!a && f) a = d.annots.find(x => x.type === 'text' && x.field === f.id);
+  const isNew = !a;
+  const before = JSON.stringify(d.annots);
+  if (!a) {
+    a = f ? { id: uid(), type: 'text', page: p.i, field: f.id, x: f.x, base: f.base, size: f.size, w: f.w, text: '', color: state.color, upper: f.upper }
+          : { id: uid(), type: 'text', page: p.i, field: null, x: opts.x, base: opts.y + 4, size: 11, w: null, text: '', color: state.color };
+    d.annots.push(a);
+  }
+  const baseSize = f ? f.size : 11;
+  const s = d.scale;
+  const inp = document.createElement('input');
+  inp.className = 'tin' + (a.upper ? ' upper' : ''); inp.type = 'text'; inp.spellcheck = false; inp.autocomplete = 'off';
+  inp.value = a.text || (f && f.date ? today() : '');
+  const place = () => {
+    const w = f ? f.w : Math.max(160, textWidth(inp.value, baseSize) + 30);
+    Object.assign(inp.style, { left: (a.x - 2) * s + 'px', top: (a.base - baseSize * 1.08) * s + 'px', width: (w + 4) * s + 'px',
+      height: baseSize * 1.45 * s + 'px', fontSize: baseSize * s + 'px', color: COLORS[a.color].css });
+  };
+  place();
+  inp.placeholder = f ? f.label : 'Text';
+  p.el.appendChild(inp);
+  state.editing = { d, p, annot: a, fieldId: f && f.id, input: inp, before, isNew, f, baseSize };
+  drawOverlay(d, p);
+  inp.addEventListener('input', () => { if (!f) place(); });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); const cur = f; commitEdit(); if (cur) gotoNextField(d, cur, 1); }
+    else if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); const cur = f; commitEdit(); if (cur) gotoNextField(d, cur, -1); }
+    else if (e.key === 'Escape') { e.preventDefault(); commitEdit(); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => { if (state.editing && state.editing.input === inp) commitEdit(); }, 0));
+  inp.addEventListener('pointerdown', e => e.stopPropagation());
+  setTimeout(() => { inp.focus(); const L = inp.value.length; inp.setSelectionRange(L, L); }, 0);
+}
+function commitEdit() {
+  const e = state.editing; if (!e) return;
+  state.editing = null;
+  const { d, p, annot: a, input, before, f, baseSize } = e;
+  let text = input.value.replace(/\s+$/, '');
+  if (a.upper) text = text.toUpperCase();
+  input.remove();
+  a.text = text;
+  // Schrift verkleinern, wenn der Text nicht ins Feld passt
+  a.size = baseSize;
+  if (f) while (a.size > 6 && textWidth(text, a.size) > f.w) a.size -= 0.25;
+  if (!text) d.annots.splice(d.annots.indexOf(a), 1);
+  if (JSON.stringify(d.annots) !== before) { d.undo.push(before); changed(d); }
+  else drawOverlay(d, p);
+}
+function gotoNextField(d, cur, dir) {
+  const all = d.fields; const i = all.indexOf(cur);
+  const nf = all[i + dir]; if (!nf) return;
+  const p = d.pages[nf.page];
+  const r = p.el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+  const y = r.top + nf.base * d.scale;
+  if (y < vr.top + 60 || y > vr.bottom - 100) viewer.scrollTop += y - (vr.top + vr.height / 3);
+  editText(d, p, { field: nf });
+}
+
+/* ---------- Radierer ---------- */
+function hitAnnot(d, p, x, y, tol) {
+  const my = d.annots.filter(a => a.page === p.i);
+  for (let k = my.length - 1; k >= 0; k--) {
+    const a = my[k];
+    if (a.type === 'mark' && Math.hypot(a.cx - x, a.cy - y) < a.h + tol) return a;
+    if (a.type === 'text' && x > a.x - tol && x < a.x + textWidth(a.text, a.size) + tol && y > a.base - a.size - tol && y < a.base + tol / 2) return a;
+    if (a.type === 'sig' && x > a.x - tol && x < a.x + a.w + tol && y > a.y - tol && y < a.y + a.h + tol) return a;
+    if (a.type === 'ink') for (let i = 0; i < a.pts.length; i++) {
+      const q = a.pts[i], r = a.pts[i + 1] || q;
+      if (distSeg(x, y, q, r) < tol + a.sw) return a;
+    }
+  }
+  return null;
+}
+function distSeg(x, y, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1]; const L = dx * dx + dy * dy;
+  let t = L ? ((x - a[0]) * dx + (y - a[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy));
+}
+function eraseAt(d, p, x, y, tol, undoPushed) {
+  const a = hitAnnot(d, p, x, y, tol);
+  if (!a) return undoPushed;
+  if (!undoPushed) pushUndo(d);
+  d.annots.splice(d.annots.indexOf(a), 1); if (state.sel === a.id) state.sel = null;
+  changed(d); return true;
+}
+
+/* ================= Tippen (Smart-Modus) ================= */
+function handleTap(d, p, x, y, pointerType) {
+  const tol = pointerType === 'touch' ? 14 : 9;
+  // Unterschrift platzieren?
+  if (state.pendingSig) { placeSig(d, p, state.pendingSig, { x, y }); state.pendingSig = null; updateUI(); return; }
+  if (state.tool === 'erase') { eraseAt(d, p, x, y, tol); return; }
+  if (state.tool === 'pen') return;
+  // Vorhandene Einträge
+  const hit = hitAnnot(d, p, x, y, pointerType === 'touch' ? 6 : 3);
+  if (hit && hit.type === 'text') { editText(d, p, { annot: hit }); return; }
+  if (hit && hit.type === 'sig') { state.sel = hit.id; drawSelection(d); return; }
+  if (state.sel) { state.sel = null; drawSelection(d); }
+  // Kreise / Kästchen
+  let best = null, bd = Infinity;
+  for (const t of p.targets) { if (t.pre) continue; const dd = Math.hypot(t.cx - x, t.cy - y); if (dd < Math.max(t.r * 2.4, tol) && dd < bd) { best = t; bd = dd; } }
+  if (best && state.tool !== 'text') { toggleMark(d, p, best); return; }
+  if (state.tool === 'x') {
+    if (hit && hit.type === 'mark') { pushUndo(d); d.annots.splice(d.annots.indexOf(hit), 1); changed(d); return; }
+    pushUndo(d); d.annots.push(newMark(p.i, x, y, 4.2, null)); changed(d); return;
+  }
+  if (hit && hit.type === 'mark') { pushUndo(d); d.annots.splice(d.annots.indexOf(hit), 1); changed(d); return; }
+  // Unterschriftslinie
+  const sg = p.sigTargets.find(s => x > s.x - 6 && x < s.x + s.w + 6 && y > s.lineY - 40 && y < s.lineY + 10);
+  if (sg && state.tool === 'tap') { openSigPad(sg); return; }
+  // Textfeld
+  const f = p.fields.find(f => x > f.x - 6 && x < f.x + f.w + 6 && y > f.base - f.size * 1.3 - 4 && y < f.base + 7);
+  if (f) { editText(d, p, { field: f }); return; }
+  if (state.tool === 'text') { editText(d, p, { x, y }); return; }
+}
+
+/* ================= Zeiger (Stift / Finger / Maus) ================= */
+const ignored = new Set();   // als Handballen erkannte Berührungen
+let gesture = null;          // aktuelle Aktion
+let inertia = null;
+
+function pageAt(d, cx, cy) {
+  for (const p of d.pages) {
+    const r = p.el.getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return { p, x: (cx - r.left) / d.scale, y: (cy - r.top) / d.scale };
+  }
+  return null;
+}
+function isPalm(e) {
+  if (e.pointerType !== 'touch') return false;
+  if (state.penDown) return true;
+  if (performance.now() - state.lastPen < 1200) return true;   // Stift ist in der Nähe → Hand liegt auf
+  if (e.width > 40 || e.height > 40) return true;               // grosse Kontaktfläche
+  return false;
+}
+function touchMayDraw() { return !state.penSeen; } // Finger zeichnen nur, wenn nie ein Stift benutzt wurde
+
+document.addEventListener('pointermove', e => { if (e.pointerType === 'pen') { state.penSeen = true; state.lastPen = performance.now(); } }, true);
+document.addEventListener('pointerover', e => { if (e.pointerType === 'pen') { state.penSeen = true; state.lastPen = performance.now(); } }, true);
+viewer.addEventListener('contextmenu', e => e.preventDefault());
+
+viewer.addEventListener('pointerdown', e => {
+  const d = doc(); if (!d) return;
+  if (e.target.closest('.tin')) return;
+  if (e.pointerType === 'pen') { state.penSeen = true; state.penDown = true; state.lastPen = performance.now(); }
+  if (e.pointerType === 'touch') {
+    if (isPalm(e) || gesture) { ignored.add(e.pointerId); return; }
+  }
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  cancelInertia();
+  const hitP = pageAt(d, e.clientX, e.clientY);
+
+  // Auswahlrahmen der Unterschrift (löschen / Grösse)
+  const h = e.target.closest('.selbox .h');
+  if (h && state.sel) {
+    const a = d.annots.find(x => x.id === state.sel);
+    if (h.classList.contains('del')) { pushUndo(d); d.annots.splice(d.annots.indexOf(a), 1); state.sel = null; changed(d); return; }
+    gesture = { kind: 'resize', id: e.pointerId, a, sx: e.clientX, sy: e.clientY, w0: a.w, h0: a.h, before: JSON.stringify(d.annots) };
+    capture(viewer, e.pointerId); return;
+  }
+  const canDraw = e.pointerType !== 'touch' || touchMayDraw();
+  if (hitP && state.tool === 'pen' && canDraw && !state.pendingSig) {
+    const { p, x, y } = hitP;
+    p.live = { pts: [[x, y]], sw: 1.3 };
+    gesture = { kind: 'ink', id: e.pointerId, p };
+    drawOverlay(d, p); capture(viewer, e.pointerId); return;
+  }
+  if (hitP && state.tool === 'erase' && canDraw) {
+    gesture = { kind: 'erase', id: e.pointerId, p: hitP.p, pushed: eraseAt(d, hitP.p, hitP.x, hitP.y, e.pointerType === 'touch' ? 12 : 6, false) };
+    capture(viewer, e.pointerId); return;
+  }
+  // Unterschrift verschieben
+  if (hitP && state.tool === 'tap') {
+    const a = hitAnnot(d, hitP.p, hitP.x, hitP.y, 3);
+    if (a && a.type === 'sig') {
+      state.sel = a.id; drawSelection(d);
+      gesture = { kind: 'move', id: e.pointerId, a, sx: e.clientX, sy: e.clientY, x0: a.x, y0: a.y, moved: false, before: JSON.stringify(d.annots) };
+      capture(viewer, e.pointerId); return;
+    }
+  }
+  // Sonst: Tippen oder Scrollen
+  gesture = { kind: 'tap', id: e.pointerId, type: e.pointerType, sx: e.clientX, sy: e.clientY, st: viewer.scrollTop, sl: viewer.scrollLeft, t: performance.now(), moved: false, hist: [] };
+  capture(viewer, e.pointerId);
+});
+
+viewer.addEventListener('pointermove', e => {
+  const d = doc(); if (!d || !gesture || e.pointerId !== gesture.id) return;
+  if (e.pointerType === 'pen') state.lastPen = performance.now();
+  const g = gesture;
+  if (g.kind === 'ink') {
+    const r = g.p.el.getBoundingClientRect();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of (evs.length ? evs : [e])) {
+      const x = (ev.clientX - r.left) / d.scale, y = (ev.clientY - r.top) / d.scale;
+      const l = g.p.live.pts[g.p.live.pts.length - 1];
+      if (Math.hypot(x - l[0], y - l[1]) > 0.35) g.p.live.pts.push([+x.toFixed(2), +y.toFixed(2)]);
+    }
+    const el = g.p.svg.querySelector('#live'); if (el) el.setAttribute('d', strokePath(g.p.live.pts));
+  } else if (g.kind === 'erase') {
+    const hp = pageAt(d, e.clientX, e.clientY);
+    if (hp) g.pushed = eraseAt(d, hp.p, hp.x, hp.y, e.pointerType === 'touch' ? 12 : 6, g.pushed);
+  } else if (g.kind === 'move') {
+    const dx = (e.clientX - g.sx) / d.scale, dy = (e.clientY - g.sy) / d.scale;
+    if (Math.hypot(dx, dy) > 1) g.moved = true;
+    g.a.x = g.x0 + dx; g.a.y = g.y0 + dy; drawOverlay(d, d.pages[g.a.page]); drawSelection(d);
+  } else if (g.kind === 'resize') {
+    const dx = (e.clientX - g.sx) / d.scale;
+    const k = Math.max(0.2, (g.w0 + dx) / g.w0);
+    g.a.w = g.w0 * k; g.a.h = g.h0 * k; drawOverlay(d, d.pages[g.a.page]); drawSelection(d);
+  } else if (g.kind === 'tap') {
+    const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+    if (!g.moved && Math.hypot(dx, dy) > (g.type === 'mouse' ? 4 : 10)) g.moved = true;
+    if (g.moved && g.type !== 'mouse') {
+      viewer.scrollTop = g.st - dy; viewer.scrollLeft = g.sl - dx;
+      g.hist.push([performance.now(), e.clientX, e.clientY]); if (g.hist.length > 6) g.hist.shift();
+    }
+  }
+});
+
+function endPointer(e, cancelled) {
+  if (ignored.delete(e.pointerId)) return;
+  if (e.pointerType === 'pen') { state.penDown = false; state.lastPen = performance.now(); }
+  const d = doc(); const g = gesture;
+  if (!d || !g || e.pointerId !== g.id) return;
+  gesture = null;
+  if (g.kind === 'ink') {
+    const live = g.p.live; g.p.live = null;
+    if (!cancelled && live.pts.length) { pushUndo(d); d.annots.push({ id: uid(), type: 'ink', page: g.p.i, pts: live.pts, sw: live.sw, color: state.color }); changed(d); }
+    else drawOverlay(d, g.p);
+  } else if (g.kind === 'move' || g.kind === 'resize') {
+    if (JSON.stringify(d.annots) !== g.before) { d.undo.push(g.before); changed(d); }
+  } else if (g.kind === 'tap' && !cancelled) {
+    if (!g.moved && performance.now() - g.t < 900) {
+      const hp = pageAt(d, e.clientX, e.clientY);
+      if (hp) handleTap(d, hp.p, hp.x, hp.y, g.type);
+      else if (state.sel) { state.sel = null; drawSelection(d); }
+    } else if (g.moved && g.type !== 'mouse' && g.hist.length > 1) startInertia(g.hist);
+  }
+}
+viewer.addEventListener('pointerup', e => endPointer(e, false));
+viewer.addEventListener('pointercancel', e => endPointer(e, true));
+
+function startInertia(hist) {
+  const a = hist[0], b = hist[hist.length - 1]; const dt = b[0] - a[0]; if (dt <= 0 || performance.now() - b[0] > 80) return;
+  let vx = (b[1] - a[1]) / dt, vy = (b[2] - a[2]) / dt; let last = performance.now();
+  const step = now => {
+    const t = now - last; last = now;
+    viewer.scrollTop -= vy * t; viewer.scrollLeft -= vx * t;
+    vx *= Math.pow(0.994, t); vy *= Math.pow(0.994, t);
+    if (Math.abs(vx) + Math.abs(vy) > 0.02) inertia = requestAnimationFrame(step); else inertia = null;
+  };
+  inertia = requestAnimationFrame(step);
+}
+function cancelInertia() { if (inertia) cancelAnimationFrame(inertia); inertia = null; }
+
+viewer.addEventListener('wheel', e => {
+  const d = doc(); if (!d) return;
+  if (e.ctrlKey) { e.preventDefault(); setZoom(d, d.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }
+}, { passive: false });
+
+/* ================= Unterschrift ================= */
+const sigCanvas = $('#sigCanvas'); const sctx = sigCanvas.getContext('2d');
+let sigStrokes = [], sigCur = null, sigFor = null;
+function openSigPad(target) {
+  commitEdit();
+  sigFor = target || null; sigStrokes = []; sigCur = null;
+  $('#sigTitle').textContent = target ? (target.label && !/^unterschrift$/i.test(target.label) ? `Unterschrift – ${target.label}` : 'Unterschrift') : 'Unterschrift';
+  $('#sigModal').classList.add('show');
+  requestAnimationFrame(() => {
+    const r = sigCanvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    sigCanvas.width = r.width * dpr; sigCanvas.height = r.height * dpr; sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redrawPad();
+  });
+}
+function closeSigPad() { $('#sigModal').classList.remove('show'); sigFor = null; }
+function redrawPad() {
+  const r = sigCanvas.getBoundingClientRect();
+  sctx.clearRect(0, 0, r.width, r.height);
+  sctx.strokeStyle = COLORS[state.color].css; sctx.lineCap = 'round'; sctx.lineJoin = 'round';
+  for (const st of [...sigStrokes, ...(sigCur ? [sigCur] : [])]) {
+    if (!st.length) continue;
+    for (let i = 1; i < st.length; i++) {
+      const a = st[i - 1], b = st[i];
+      sctx.lineWidth = 1.6 + 2.6 * ((a[2] + b[2]) / 2);
+      sctx.beginPath(); sctx.moveTo(a[0], a[1]); sctx.lineTo(b[0], b[1]); sctx.stroke();
+    }
+    if (st.length === 1) { sctx.beginPath(); sctx.arc(st[0][0], st[0][1], 2, 0, 7); sctx.fillStyle = sctx.strokeStyle; sctx.fill(); }
+  }
+  $('#sigOk').disabled = !sigStrokes.length;
+}
+let sigPtr = null;
+sigCanvas.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'pen') { state.penSeen = true; state.lastPen = performance.now(); }
+  if (e.pointerType === 'touch' && (isPalm(e) || !touchMayDraw())) return;
+  if (sigPtr !== null) return;
+  sigPtr = e.pointerId; capture(sigCanvas, e.pointerId);
+  const r = sigCanvas.getBoundingClientRect();
+  sigCur = [[e.clientX - r.left, e.clientY - r.top, e.pressure || 0.5]]; redrawPad();
+});
+sigCanvas.addEventListener('pointermove', e => {
+  if (e.pointerId !== sigPtr || !sigCur) return;
+  const r = sigCanvas.getBoundingClientRect();
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of (evs.length ? evs : [e])) sigCur.push([ev.clientX - r.left, ev.clientY - r.top, ev.pressure || 0.5]);
+  redrawPad();
+});
+const sigEnd = e => { if (e.pointerId !== sigPtr) return; sigPtr = null; if (sigCur && sigCur.length) sigStrokes.push(sigCur); sigCur = null; redrawPad(); };
+sigCanvas.addEventListener('pointerup', sigEnd); sigCanvas.addEventListener('pointercancel', sigEnd);
+$('#sigModal').addEventListener('contextmenu', e => e.preventDefault());
+$('#sigClear').onclick = () => { sigStrokes = []; redrawPad(); };
+$('#sigCancel').onclick = () => { state.pendingSig = null; closeSigPad(); updateUI(); };
+$('#sigOk').onclick = () => {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const st of sigStrokes) for (const q of st) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+  const bw = Math.max(x1 - x0, 4), bh = Math.max(y1 - y0, 4);
+  const baseY = sigCanvas.getBoundingClientRect().height * 0.72;
+  const sig = { strokes: sigStrokes.map(st => st.map(q => [+((q[0] - x0) / bw).toFixed(4), +((q[1] - y0) / bh).toFixed(4)])), bw, bh, baseFrac: Math.min(1, Math.max(0, (baseY - y0) / bh)) };
+  const target = sigFor; closeSigPad();
+  const d = doc();
+  if (target) placeSig(d, d.pages[target.page], sig, null, target);
+  else { state.pendingSig = sig; updateUI(); toast('Jetzt auf die Stelle tippen, wo die Unterschrift hin soll.'); }
+};
+function placeSig(d, p, sig, at, target) {
+  pushUndo(d);
+  const maxW = target ? Math.min(target.w * 0.92, 210) : 170, maxH = 44;
+  const k = Math.min(maxW / sig.bw, maxH / sig.bh);
+  const w = sig.bw * k, h = sig.bh * k;
+  let x, y;
+  if (target) {
+    // alte Unterschrift auf dieser Linie ersetzen
+    d.annots = d.annots.filter(a => !(a.type === 'sig' && a.target === target.id));
+    x = target.x + Math.max(4, (target.w - w) * 0.25);
+    y = target.lineY - h * sig.baseFrac - 1;       // die Grundlinie des Pads liegt auf der Linie
+    y = Math.max(y, target.lineY - h - 6);
+  } else { x = at.x - w / 2; y = at.y - h / 2; }
+  const a = { id: uid(), type: 'sig', page: p.i, x, y, w, h, strokes: sig.strokes, sw: 1.15, color: state.color, target: target ? target.id : null };
+  d.annots.push(a); state.sel = a.id; changed(d);
+  toast('Unterschrift eingefügt – zum Verschieben ziehen, ✕ zum Löschen.');
+}
+$('#btnSign').onclick = () => {
+  const d = doc(); if (!d) return;
+  const signed = new Set(d.annots.filter(a => a.type === 'sig').map(a => a.target));
+  const t = d.pages.flatMap(p => p.sigTargets).find(s => !signed.has(s.id));
+  if (t) {
+    const p = d.pages[t.page]; const r = p.el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+    viewer.scrollTop += r.top + t.lineY * d.scale - (vr.top + vr.height * 0.55);
+    openSigPad(t);
+  } else openSigPad(null);
+};
+
+/* ================= Speichern ================= */
+async function buildPdf(d) {
+  const { PDFDocument, StandardFonts, rgb, LineCapStyle } = PDFLib;
+  const pdf = await PDFDocument.load(d.bytes, { ignoreEncryption: true });
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const pages = pdf.getPages();
+  const safe = s => [...s].map(ch => { try { font.encodeText(ch); return ch; } catch (e) { return '?'; } }).join('');
+  for (const a of d.annots) {
+    const pg = pages[a.page]; const vp = d.pages[a.page].vp1;
+    const P = (x, y) => { const q = vp.convertToPdfPoint(x, y); return { x: q[0], y: q[1] }; };
+    const color = rgb(...COLORS[a.color || 'blue'].rgb);
+    const line = (p1, p2, th) => pg.drawLine({ start: P(p1[0], p1[1]), end: P(p2[0], p2[1]), thickness: th, color, lineCap: LineCapStyle.Round });
+    const poly = (pts, th) => {
+      if (pts.length === 1) { const c = P(pts[0][0], pts[0][1]); pg.drawCircle({ x: c.x, y: c.y, size: th / 2, color }); return; }
+      for (let i = 1; i < pts.length; i++) line(pts[i - 1], pts[i], th);
+    };
+    if (a.type === 'mark') {
+      const h = a.h, cx = a.cx, cy = a.cy;
+      if (a.style === 'check') poly([[cx - h * 0.95, cy + h * 0.05], [cx - h * 0.3, cy + h * 0.75], [cx + h * 1.05, cy - h * 1.05]], a.sw);
+      else { line([cx - h, cy - h], [cx + h, cy + h], a.sw); line([cx + h, cy - h], [cx - h, cy + h], a.sw); }
+    } else if (a.type === 'text' && a.text) {
+      const o = P(a.x, a.base);
+      pg.drawText(safe(a.text), { x: o.x, y: o.y, size: a.size, font, color });
+    } else if (a.type === 'ink') poly(a.pts, a.sw);
+    else if (a.type === 'sig') for (const st of a.strokes) poly(sigPts(a, st), a.sw);
+  }
+  return pdf.save();
+}
+async function saveDoc() {
+  const d = doc(); if (!d) return;
+  commitEdit();
+  const signed = d.annots.some(a => a.type === 'sig');
+  const hasSigLine = d.pages.some(p => p.sigTargets.length);
+  if (hasSigLine && !signed && !confirm('Es ist noch keine Unterschrift drauf. Trotzdem speichern?')) return;
+  let out;
+  try { out = await buildPdf(d); } catch (e) { console.error(e); toast('Fehler beim Erstellen der PDF: ' + e.message, 5000); return; }
+  const suggested = d.name.replace(/\.pdf$/i, '') + ' - ausgefüllt.pdf';
+  if (window.showSaveFilePicker) {
+    try {
+      // Aus Outlook geöffnete PDFs liegen in einem versteckten Temp-Ordner → dort nicht speichern,
+      // sondern im zuletzt benutzten Speicherordner (merkt sich der Browser über die id).
+      const opts = { suggestedName: suggested, id: 'rapport-speichern', types: [{ description: 'PDF-Dokument', accept: { 'application/pdf': ['.pdf'] } }] };
+      if (d.handle && !d.fromLaunch) opts.startIn = d.handle;
+      const h = await showSaveFilePicker(opts);
+      const w = await h.createWritable(); await w.write(out); await w.close();
+      d.dirty = false; try { localStorage.removeItem(d.key); } catch (e) {}
+      renderTabs(); toast('✓ Gespeichert: ' + h.name, 3500); return;
+    } catch (e) { if (e.name === 'AbortError') return; console.warn(e); }
+  }
+  const url = URL.createObjectURL(new Blob([out], { type: 'application/pdf' }));
+  const link = document.createElement('a'); link.href = url; link.download = suggested; document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  d.dirty = false; try { localStorage.removeItem(d.key); } catch (e) {}
+  renderTabs(); toast('✓ Gespeichert im Download-Ordner: ' + suggested, 4000);
+}
+
+/* ================= Toolbar ================= */
+document.querySelectorAll('.tool').forEach(b => b.onclick = () => {
+  commitEdit(); state.tool = b.dataset.tool; state.sel = null; state.pendingSig = null;
+  const d = doc(); if (d) redrawAll(d); else updateUI();
+});
+$('#btnSave').onclick = saveDoc;
+$('#btnUndo').onclick = undo;
+$('#btnAll').onclick = checkAll;
+$('#btnStyle').onclick = () => { state.markStyle = state.markStyle === 'x' ? 'check' : 'x'; savePrefs(); updateUI(); toast(state.markStyle === 'x' ? 'Abhaken mit X' : 'Abhaken mit Haken ✓'); };
+$('#btnColor').onclick = () => { state.color = state.color === 'blue' ? 'black' : 'blue'; savePrefs(); updateUI(); };
+$('#zoomIn').onclick = () => { const d = doc(); if (d) setZoom(d, d.scale * 1.2); };
+$('#zoomOut').onclick = () => { const d = doc(); if (d) setZoom(d, d.scale / 1.2); };
+$('#zoomFit').onclick = () => { const d = doc(); if (d) fitZoom(d); };
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveDoc(); }
+  else if (e.ctrlKey && e.key.toLowerCase() === 'o') { e.preventDefault(); pickFiles(); }
+  else if (e.ctrlKey && e.key.toLowerCase() === 'z' && !state.editing) { e.preventDefault(); undo(); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && state.sel && !state.editing) {
+    const d = doc(); const a = d && d.annots.find(x => x.id === state.sel);
+    if (a) { pushUndo(d); d.annots.splice(d.annots.indexOf(a), 1); state.sel = null; changed(d); }
+  }
+});
+window.addEventListener('beforeunload', e => { if (state.docs.some(d => d.dirty)) { e.preventDefault(); e.returnValue = ''; } });
+updateUI();
+
+/* ================= Web-App: PDFs von Windows öffnen lassen + offline ================= */
+// Installiert als App: Doppelklick / „Öffnen mit“ auf eine PDF übergibt die Datei hier.
+if ('launchQueue' in window) {
+  launchQueue.setConsumer(async params => {
+    for (const h of params.files || []) {
+      try { const f = await h.getFile(); await loadDoc(f, h, true); } catch (e) { console.warn(e); }
+    }
+  });
+}
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service Worker', e));
+}
+</script>
+</body>
+</html>
