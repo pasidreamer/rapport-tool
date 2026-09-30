@@ -3,7 +3,7 @@
   "short_name": "Rapport",
   "description": "Rapporte und Checklisten abhaken, ausfüllen und unterschreiben.",
   "lang": "de-CH",
-  "id": "./",
+  "id": "/rapport-tool/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
