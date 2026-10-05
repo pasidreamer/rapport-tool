@@ -621,6 +621,13 @@ function checkAll() {
 }
 
 /* ---------- Text bearbeiten ---------- */
+// Nach einem Touch-Tipp schickt der Browser noch Maus-Ereignisse (mousedown/click) hinterher. Die würden den Fokus vom
+// frisch geöffneten Eingabefeld nehmen und die Bildschirmtastatur sofort wieder schliessen -> unterbinden.
+for (const t of ['mousedown', 'mouseup', 'click'])
+  document.addEventListener(t, e => {
+    const ed = state.editing;
+    if (ed && performance.now() - ed.born < 1000 && e.target !== ed.input) { e.preventDefault(); e.stopPropagation(); if (document.activeElement !== ed.input) ed.input.focus(); }
+  }, true);
 function editText(d, p, opts) {
   commitEdit();
   let a = opts.annot;
@@ -646,7 +653,7 @@ function editText(d, p, opts) {
   place();
   inp.placeholder = f ? f.label : 'Text';
   p.el.appendChild(inp);
-  state.editing = { d, p, annot: a, fieldId: f && f.id, input: inp, before, isNew, f, baseSize };
+  state.editing = { d, p, annot: a, fieldId: f && f.id, input: inp, before, isNew, f, baseSize, born: performance.now() };
   drawOverlay(d, p);
   inp.addEventListener('input', () => { if (!f) place(); });
   inp.addEventListener('keydown', e => {
