@@ -648,9 +648,18 @@ function editText(d, p, opts) {
     else if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); const cur = f; commitEdit(); if (cur) gotoNextField(d, cur, -1); }
     else if (e.key === 'Escape') { e.preventDefault(); commitEdit(); }
   });
-  inp.addEventListener('blur', () => setTimeout(() => { if (state.editing && state.editing.input === inp) commitEdit(); }, 0));
+  // Touch: Nach dem Antippen feuern noch Maus-/Klick-Ereignisse und klauen den Fokus -> Bildschirmtastatur ging sofort wieder zu.
+  // Darum: in den ersten 700 ms Fokus zurückholen statt das Feld zu schliessen.
+  const born = performance.now();
+  inp.inputMode = 'text'; inp.enterKeyHint = 'next';
+  const refocus = () => { if (state.editing && state.editing.input === inp && document.activeElement !== inp) { inp.focus(); const L = inp.value.length; try { inp.setSelectionRange(L, L); } catch (_) {} } };
+  inp.addEventListener('blur', () => {
+    if (performance.now() - born < 700) { setTimeout(refocus, 0); return; }
+    setTimeout(() => { if (state.editing && state.editing.input === inp) commitEdit(); }, 0);
+  });
   inp.addEventListener('pointerdown', e => e.stopPropagation());
-  setTimeout(() => { inp.focus(); const L = inp.value.length; inp.setSelectionRange(L, L); }, 0);
+  inp.focus();
+  for (const ms of [0, 60, 200, 450]) setTimeout(refocus, ms);
 }
 function commitEdit() {
   const e = state.editing; if (!e) return;
