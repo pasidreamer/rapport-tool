@@ -337,7 +337,7 @@ function closeDoc(d) {
 function fitZoom(d, rerender = true) {
   const maxW = Math.max(...d.pages.map(p => p.w));
   d.scale = Math.max(0.3, (viewer.clientWidth - 50) / maxW);
-  d.fit = true;
+  d.fit = true; lastFitW = viewer.clientWidth;
   if (rerender) renderAll(d);
 }
 function setZoom(d, s) {
@@ -369,7 +369,13 @@ async function renderCanvas(d, p) {
   } catch (e) { /* abgebrochen */ }
 }
 let resizeTimer;
-window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { const d = doc(); if (d && d.fit) fitZoom(d); }, 200); });
+let lastFitW = 0;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
+  const d = doc(); if (!d || !d.fit) return;
+  // Die Bildschirmtastatur ändert nur die Höhe: dann nicht neu rendern (das würde das Eingabefeld schliessen)
+  if (state.editing || viewer.clientWidth === lastFitW) return;
+  lastFitW = viewer.clientWidth; fitZoom(d);
+}, 200); });
 
 /* ================= Seitenanalyse ================= */
 async function analyzePage(d, p) {
