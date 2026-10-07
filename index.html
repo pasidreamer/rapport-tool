@@ -59,6 +59,15 @@ body { display: flex; flex-direction: column; }
 .page { position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.18); flex: none; }
 .page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .page svg.ov { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* Textebene zum Markieren/Kopieren (nur im Werkzeug „Kopieren“ aktiv) */
+.textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-align: initial; transform-origin: 0 0; display: none;
+  user-select: text; -webkit-user-select: text; forced-color-adjust: none; }
+body.selmode .textLayer { display: block; }
+.textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer ::selection { background: rgba(29, 78, 216, .32); }
+#copyBtn { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 25; display: none; font: inherit; font-size: 17px; font-weight: 600;
+  padding: 14px 26px; border-radius: 14px; border: 0; background: var(--accent); color: #fff; box-shadow: 0 4px 18px rgba(0,0,0,.3); cursor: pointer; }
+#copyBtn.show { display: block; }
 .page .pnum { position: absolute; top: -16px; right: 0; font-size: 11px; color: var(--muted); }
 .tin { position: absolute; border: 0; outline: 2px solid var(--accent); border-radius: 2px; background: rgba(255,255,255,.96);
   font-family: Helvetica, Arial, sans-serif; padding: 0 2px; margin: 0; color: var(--ink); user-select: text; -webkit-user-select: text; touch-action: auto; }
@@ -123,6 +132,10 @@ body.hasdoc #empty { display: none; }
       <span class="big">T</span>Text</button>
     <button class="btn tool" data-tool="pen" title="Mit dem Stift frei schreiben / zeichnen">
       <svg viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>Stift</button>
+    <button class="btn tool" data-tool="hl" title="Markierstift: Wörter gelb anstreichen">
+      <svg viewBox="0 0 24 24"><path d="M9 14l-3 3v3h3l3-3"/><path d="M9 14l7.5-9.5a1.8 1.8 0 0 1 2.6-.2l1.6 1.6a1.8 1.8 0 0 1-.2 2.6L12 17z"/><path d="M3 21h8" stroke="#e0b400" stroke-width="3"/></svg>Marker</button>
+    <button class="btn tool" data-tool="select" title="Text in der PDF markieren und kopieren (Strg+C)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Kopieren</button>
     <button class="btn tool" data-tool="erase" title="Radierer: tippe auf einen Eintrag, um ihn zu löschen">
       <svg viewBox="0 0 24 24"><path d="M20 20H9L4 15a2 2 0 0 1 0-3l8-8a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-8 8"/><path d="M7 11l6 6"/></svg>Radierer</button>
   </div>
@@ -173,6 +186,7 @@ body.hasdoc #empty { display: none; }
     </div>
   </div>
 </div>
+<button id="copyBtn">Text kopieren</button>
 <div id="banner"></div>
 <div id="toast"></div>
 <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple hidden>
@@ -190,7 +204,11 @@ const viewer = $('#viewer');
 const COLORS = {
   blue:  { css: '#14338c', rgb: [0.078, 0.2, 0.55], name: 'Blau' },
   black: { css: '#111111', rgb: [0.07, 0.07, 0.07], name: 'Schwarz' },
+  red:   { css: '#c81e1e', rgb: [0.784, 0.118, 0.118], name: 'Rot' },
 };
+const PEN_COLORS = ['blue', 'black', 'red'];
+const MARKER = { css: '#ffe100', rgb: [1, 0.88, 0], opacity: 0.45, width: 11 };  // Markierstift (immer gelb)
+const isDrawTool = () => state.tool === 'pen' || state.tool === 'hl';
 const OPEN_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '☐', '□', '❏', '❑', '◻', '⬜', '', '', '', '', '']);
 const CIRCLE_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '', '']);
 const CHECKED_GLYPHS = new Set(['☒', '☑', '✓', '✔', '⊠', '', '', '']);
@@ -277,7 +295,8 @@ async function loadDoc(file, handle, fromLaunch = false) {
     p.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); p.svg.setAttribute('class', 'ov');
     p.svg.setAttribute('viewBox', `0 0 ${p.w} ${p.h}`); p.svg.setAttribute('preserveAspectRatio', 'none');
     const num = document.createElement('div'); num.className = 'pnum'; num.textContent = `Seite ${i} / ${pdf.numPages}`;
-    p.el.append(p.canvas, p.svg, num); d.el.appendChild(p.el);
+    p.tl = document.createElement('div'); p.tl.className = 'textLayer';
+    p.el.append(p.canvas, p.svg, p.tl, num); d.el.appendChild(p.el);
     d.pages.push(p);
   }
   state.docs.push(d);
@@ -352,7 +371,21 @@ function renderAll(d) {
     renderCanvas(d, p);
   }
   redrawAll(d);
+  if (state.tool === 'select') renderTextLayers(d);
   $('#zoomLbl').textContent = Math.round(d.scale * 100) + '%';
+}
+// Unsichtbare Textebene über der Seite, damit man Text markieren und kopieren kann
+async function renderTextLayers(d) {
+  for (const p of d.pages) {
+    if (p.tlScale === d.scale) continue;
+    p.tlScale = d.scale;
+    p.tl.innerHTML = ''; p.tl.style.setProperty('--scale-factor', d.scale);
+    try {
+      p.tc = p.tc || await p.page.getTextContent();
+      if (p.tlScale !== d.scale) continue; // inzwischen neu gezoomt
+      await pdfjsLib.renderTextLayer({ textContentSource: p.tc, container: p.tl, viewport: p.page.getViewport({ scale: d.scale }), textDivs: [] }).promise;
+    } catch (e) { console.warn('Textebene', e); }
+  }
 }
 async function renderCanvas(d, p) {
   const dpr = window.devicePixelRatio || 1;
@@ -536,6 +569,9 @@ function strokePath(pts) {
   const l = pts[pts.length - 1]; return s + ` L${l[0]},${l[1]}`;
 }
 function sigPts(a, st) { return st.map(q => [a.x + q[0] * a.w, a.y + q[1] * a.h]); }
+function hlPath(pts, sw, id) {
+  return `<path ${id ? `id="${id}" ` : ''}d="${strokePath(pts)}" stroke="${MARKER.css}" stroke-width="${sw}" stroke-opacity="${MARKER.opacity}" fill="none" stroke-linecap="butt" stroke-linejoin="round" style="mix-blend-mode:multiply"/>`;
+}
 function drawOverlay(d, p) {
   const out = [];
   const my = d.annots.filter(a => a.page === p.i);
@@ -553,15 +589,17 @@ function drawOverlay(d, p) {
       out.push(`<rect x="${s.x}" y="${s.lineY - 34}" width="${s.w}" height="36" rx="3" fill="rgba(250,190,20,.13)" stroke="rgba(200,140,0,.5)" stroke-width=".6" stroke-dasharray="3 2"/>` +
         `<text x="${s.x + s.w / 2}" y="${s.lineY - 14}" font-size="8" text-anchor="middle" fill="rgba(140,100,0,.8)" font-family="Segoe UI, sans-serif">✍ Antippen zum Unterschreiben</text>`);
   }
-  for (const a of my) {
+  for (const a of [...my.filter(a => a.hl), ...my.filter(a => !a.hl)]) {   // Markierstift liegt unter allem anderen
     const col = COLORS[a.color || 'blue'].css;
-    if (a.type === 'mark') out.push(`<path d="${markPath(a)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+    if (a.hl) out.push(hlPath(a.pts, a.sw));
+    else if (a.type === 'mark') out.push(`<path d="${markPath(a)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
     else if (a.type === 'text' && a.text && state.editing?.annot !== a)
       out.push(`<text x="${a.x}" y="${a.base}" font-size="${a.size}" fill="${col}" font-family="Helvetica, Arial, sans-serif" style="white-space:pre">${esc(a.text)}</text>`);
     else if (a.type === 'ink') out.push(`<path d="${strokePath(a.pts)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
     else if (a.type === 'sig') for (const st of a.strokes) out.push(`<path d="${strokePath(sigPts(a, st))}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
   }
-  if (p.live) out.push(`<path id="live" d="${strokePath(p.live.pts)}" stroke="${COLORS[state.color].css}" stroke-width="${p.live.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+  if (p.live && p.live.hl) out.push(hlPath(p.live.pts, p.live.sw, 'live'));
+  else if (p.live) out.push(`<path id="live" d="${strokePath(p.live.pts)}" stroke="${COLORS[state.color].css}" stroke-width="${p.live.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
   p.svg.innerHTML = out.join('');
 }
 function drawSelection(d) {
@@ -594,7 +632,9 @@ function updateUI() {
   $('#styleIcon').textContent = state.markStyle === 'x' ? '✕' : '✓';
   $('#styleLbl').textContent = state.markStyle === 'x' ? 'Zeichen: X' : 'Zeichen: ✓';
   $('#swatch').style.background = COLORS[state.color].css; $('#colorLbl').textContent = COLORS[state.color].name;
-  const b = { pen: 'Stift-Modus: Nur der Stift schreibt. Mit dem Finger kannst du weiterhin scrollen.', x: 'Frei-X: Tippe irgendwo hin, um ein X zu setzen.', text: 'Text: Tippe irgendwo hin, um freien Text zu schreiben.', erase: 'Radierer: Tippe auf einen Eintrag (oder streiche darüber), um ihn zu löschen.' }[state.tool];
+  document.body.classList.toggle('selmode', state.tool === 'select');
+  if (state.tool !== 'select') $('#copyBtn').classList.remove('show');
+  const b = { hl: 'Markierstift: Mit dem Stift über die Wörter fahren. Gerade Striche werden automatisch begradigt.', select: 'Kopieren: Text mit Stift oder Maus markieren, dann „Text kopieren“ (oder Strg+C).', pen: 'Stift-Modus: Nur der Stift schreibt. Mit dem Finger kannst du weiterhin scrollen.', x: 'Frei-X: Tippe irgendwo hin, um ein X zu setzen.', text: 'Text: Tippe irgendwo hin, um freien Text zu schreiben.', erase: 'Radierer: Tippe auf einen Eintrag (oder streiche darüber), um ihn zu löschen.' }[state.tool];
   banner(d && !state.pendingSig ? b : (state.pendingSig ? 'Tippe auf die Stelle, wo die Unterschrift hin soll.' : null));
 }
 
@@ -733,7 +773,7 @@ function handleTap(d, p, x, y, pointerType) {
   // Unterschrift platzieren?
   if (state.pendingSig) { placeSig(d, p, state.pendingSig, { x, y }); state.pendingSig = null; updateUI(); return; }
   if (state.tool === 'erase') { eraseAt(d, p, x, y, tol); return; }
-  if (state.tool === 'pen') return;
+  if (isDrawTool() || state.tool === 'select') return;
   // Vorhandene Einträge
   const hit = hitAnnot(d, p, x, y, pointerType === 'touch' ? 6 : 3);
   if (hit && hit.type === 'text') { editText(d, p, { annot: hit }); return; }
@@ -790,6 +830,8 @@ viewer.addEventListener('pointerdown', e => {
     if (isPalm(e) || gesture) { ignored.add(e.pointerId); return; }
   }
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  // Text markieren: Stift/Maus dem Browser überlassen (Finger scrollt weiterhin)
+  if (state.tool === 'select' && e.pointerType !== 'touch' && e.target.closest('.textLayer')) return;
   cancelInertia();
   const hitP = pageAt(d, e.clientX, e.clientY);
 
@@ -802,9 +844,9 @@ viewer.addEventListener('pointerdown', e => {
     capture(viewer, e.pointerId); return;
   }
   const canDraw = e.pointerType !== 'touch' || touchMayDraw();
-  if (hitP && state.tool === 'pen' && canDraw && !state.pendingSig) {
+  if (hitP && isDrawTool() && canDraw && !state.pendingSig) {
     const { p, x, y } = hitP;
-    p.live = { pts: [[x, y]], sw: 1.3 };
+    p.live = state.tool === 'hl' ? { pts: [[x, y]], sw: MARKER.width, hl: true } : { pts: [[x, y]], sw: 1.3 };
     gesture = { kind: 'ink', id: e.pointerId, p };
     drawOverlay(d, p); capture(viewer, e.pointerId); return;
   }
@@ -868,7 +910,15 @@ function endPointer(e, cancelled) {
   gesture = null;
   if (g.kind === 'ink') {
     const live = g.p.live; g.p.live = null;
-    if (!cancelled && live.pts.length) { pushUndo(d); d.annots.push({ id: uid(), type: 'ink', page: g.p.i, pts: live.pts, sw: live.sw, color: state.color }); changed(d); }
+    if (!cancelled && live.hl && live.pts.length > 1) {
+      // fast waagrechte Markierung begradigen, damit sie sauber über der Zeile liegt
+      const xs = live.pts.map(q => q[0]), ys = live.pts.map(q => q[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      let pts = live.pts;
+      if (y1 - y0 < 6 && x1 - x0 > 4) { const y = +(ys.reduce((u, v) => u + v, 0) / ys.length).toFixed(2); pts = [[x0, y], [x1, y]]; }
+      pushUndo(d); d.annots.push({ id: uid(), type: 'ink', hl: true, page: g.p.i, pts, sw: live.sw }); changed(d);
+    }
+    else if (!cancelled && !live.hl && live.pts.length) { pushUndo(d); d.annots.push({ id: uid(), type: 'ink', page: g.p.i, pts: live.pts, sw: live.sw, color: state.color }); changed(d); }
     else drawOverlay(d, g.p);
   } else if (g.kind === 'move' || g.kind === 'resize') {
     if (JSON.stringify(d.annots) !== g.before) { d.undo.push(g.before); changed(d); }
@@ -993,12 +1043,12 @@ $('#btnSign').onclick = () => {
 
 /* ================= Speichern ================= */
 async function buildPdf(d) {
-  const { PDFDocument, StandardFonts, rgb, LineCapStyle } = PDFLib;
+  const { PDFDocument, StandardFonts, rgb, LineCapStyle, BlendMode } = PDFLib;
   const pdf = await PDFDocument.load(d.bytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const pages = pdf.getPages();
   const safe = s => [...s].map(ch => { try { font.encodeText(ch); return ch; } catch (e) { return '?'; } }).join('');
-  for (const a of d.annots) {
+  for (const a of [...d.annots.filter(a => a.hl), ...d.annots.filter(a => !a.hl)]) {
     const pg = pages[a.page]; const vp = d.pages[a.page].vp1;
     const P = (x, y) => { const q = vp.convertToPdfPoint(x, y); return { x: q[0], y: q[1] }; };
     const color = rgb(...COLORS[a.color || 'blue'].rgb);
@@ -1007,7 +1057,11 @@ async function buildPdf(d) {
       if (pts.length === 1) { const c = P(pts[0][0], pts[0][1]); pg.drawCircle({ x: c.x, y: c.y, size: th / 2, color }); return; }
       for (let i = 1; i < pts.length; i++) line(pts[i - 1], pts[i], th);
     };
-    if (a.type === 'mark') {
+    if (a.hl) {
+      // Markierstift: ein durchgehender, halbtransparenter Pfad (Multiplizieren → Text bleibt lesbar)
+      const o = P(0, 0);
+      pg.drawSvgPath(strokePath(a.pts), { x: o.x, y: o.y, borderColor: rgb(...MARKER.rgb), borderWidth: a.sw, borderOpacity: MARKER.opacity, borderLineCap: LineCapStyle.Butt, blendMode: BlendMode.Multiply });
+    } else if (a.type === 'mark') {
       const h = a.h, cx = a.cx, cy = a.cy;
       if (a.style === 'check') poly([[cx - h * 0.95, cy + h * 0.05], [cx - h * 0.3, cy + h * 0.75], [cx + h * 1.05, cy - h * 1.05]], a.sw);
       else { line([cx - h, cy - h], [cx + h, cy + h], a.sw); line([cx + h, cy - h], [cx - h, cy + h], a.sw); }
@@ -1050,13 +1104,23 @@ async function saveDoc() {
 /* ================= Toolbar ================= */
 document.querySelectorAll('.tool').forEach(b => b.onclick = () => {
   commitEdit(); state.tool = b.dataset.tool; state.sel = null; state.pendingSig = null;
-  const d = doc(); if (d) redrawAll(d); else updateUI();
+  if (state.tool !== 'select') getSelection().removeAllRanges();
+  const d = doc(); if (d) { redrawAll(d); if (state.tool === 'select') renderTextLayers(d); } else updateUI();
 });
+// Text kopieren: Knopf erscheint, sobald im Werkzeug „Kopieren“ etwas markiert ist
+const selectedText = () => state.tool === 'select' ? String(getSelection()).replace(/\u00a0/g, ' ').trim() : '';
+document.addEventListener('selectionchange', () => $('#copyBtn').classList.toggle('show', !!selectedText()));
+$('#copyBtn').addEventListener('pointerdown', e => e.preventDefault()); // Markierung beim Antippen behalten
+$('#copyBtn').onclick = async () => {
+  const t = selectedText(); if (!t) return;
+  try { await navigator.clipboard.writeText(t); } catch (e) { document.execCommand('copy'); }
+  toast('Kopiert: ' + (t.length > 60 ? t.slice(0, 60) + ' …' : t));
+};
 $('#btnSave').onclick = saveDoc;
 $('#btnUndo').onclick = undo;
 $('#btnAll').onclick = checkAll;
 $('#btnStyle').onclick = () => { state.markStyle = state.markStyle === 'x' ? 'check' : 'x'; savePrefs(); updateUI(); toast(state.markStyle === 'x' ? 'Abhaken mit X' : 'Abhaken mit Haken ✓'); };
-$('#btnColor').onclick = () => { state.color = state.color === 'blue' ? 'black' : 'blue'; savePrefs(); updateUI(); };
+$('#btnColor').onclick = () => { state.color = PEN_COLORS[(PEN_COLORS.indexOf(state.color) + 1) % PEN_COLORS.length]; savePrefs(); updateUI(); toast('Farbe: ' + COLORS[state.color].name, 1200); };
 $('#zoomIn').onclick = () => { const d = doc(); if (d) setZoom(d, d.scale * 1.2); };
 $('#zoomOut').onclick = () => { const d = doc(); if (d) setZoom(d, d.scale / 1.2); };
 $('#zoomFit').onclick = () => { const d = doc(); if (d) fitZoom(d); };
