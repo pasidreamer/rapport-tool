@@ -16,7 +16,7 @@ hochgeladen.
 - **Handballen-Schutz**: Nur der Stift schreibt. Solange der Stift in der Nähe ist, werden
   Berührungen ignoriert. Mit dem Finger scrollen geht, wenn der Stift weg ist.
 - Freier Stift (Blau, Schwarz, Rot), freier Text, Frei-X, Radierer, Rückgängig, Zwischenspeicher bei Absturz.
-- **Marker**: gelber Markierstift. Fast waagrechte Striche werden begradigt, der Text bleibt lesbar.
+- **Marker**: Markierstift in Gelb, Grün, Pink, Orange oder Hellblau (Farbknopf). Fast waagrechte Striche werden begradigt, der Text bleibt lesbar.
 - **Kopieren**: Text in der PDF mit Stift oder Maus markieren → „Text kopieren“ (oder Strg+C).
 - **Speichern** erzeugt „… - ausgefüllt.pdf“.
 

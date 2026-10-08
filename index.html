@@ -207,7 +207,15 @@ const COLORS = {
   red:   { css: '#c81e1e', rgb: [0.784, 0.118, 0.118], name: 'Rot' },
 };
 const PEN_COLORS = ['blue', 'black', 'red'];
-const MARKER = { css: '#ffe100', rgb: [1, 0.88, 0], opacity: 0.45, width: 11 };  // Markierstift (immer gelb)
+const MARKER = { opacity: 0.45, width: 11 };
+const MARKER_COLORS = {   // Leuchtfarben für den Markierstift
+  yellow: { css: '#ffe100', rgb: [1, 0.88, 0], name: 'Gelb' },
+  green:  { css: '#5ee04a', rgb: [0.37, 0.88, 0.29], name: 'Grün' },
+  pink:   { css: '#ff6fb5', rgb: [1, 0.435, 0.71], name: 'Pink' },
+  orange: { css: '#ffa01e', rgb: [1, 0.627, 0.118], name: 'Orange' },
+  cyan:   { css: '#4cc9ff', rgb: [0.3, 0.79, 1], name: 'Hellblau' },
+};
+const markerColor = a => MARKER_COLORS[a && a.hlColor] || MARKER_COLORS.yellow;
 const isDrawTool = () => state.tool === 'pen' || state.tool === 'hl';
 const OPEN_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '☐', '□', '❏', '❑', '◻', '⬜', '', '', '', '', '']);
 const CIRCLE_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '', '']);
@@ -215,15 +223,16 @@ const CHECKED_GLYPHS = new Set(['☒', '☑', '✓', '✔', '⊠', '', '',
 const LS_PREFIX = 'rapport-tool:';
 
 const state = {
-  docs: [], active: null, tool: 'tap', markStyle: 'x', color: 'blue',
+  docs: [], active: null, tool: 'tap', markStyle: 'x', color: 'blue', hlColor: 'yellow',
   penSeen: false, lastPen: 0, penDown: false, sel: null, pendingSig: null, editing: null,
 };
 try {
   const pref = JSON.parse(localStorage.getItem(LS_PREFIX + 'prefs') || '{}');
   if (pref.markStyle) state.markStyle = pref.markStyle;
   if (pref.color && COLORS[pref.color]) state.color = pref.color;
+  if (pref.hlColor && MARKER_COLORS[pref.hlColor]) state.hlColor = pref.hlColor;
 } catch (e) {}
-function savePrefs() { try { localStorage.setItem(LS_PREFIX + 'prefs', JSON.stringify({ markStyle: state.markStyle, color: state.color })); } catch (e) {} }
+function savePrefs() { try { localStorage.setItem(LS_PREFIX + 'prefs', JSON.stringify({ markStyle: state.markStyle, color: state.color, hlColor: state.hlColor })); } catch (e) {} }
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
@@ -569,8 +578,8 @@ function strokePath(pts) {
   const l = pts[pts.length - 1]; return s + ` L${l[0]},${l[1]}`;
 }
 function sigPts(a, st) { return st.map(q => [a.x + q[0] * a.w, a.y + q[1] * a.h]); }
-function hlPath(pts, sw, id) {
-  return `<path ${id ? `id="${id}" ` : ''}d="${strokePath(pts)}" stroke="${MARKER.css}" stroke-width="${sw}" stroke-opacity="${MARKER.opacity}" fill="none" stroke-linecap="butt" stroke-linejoin="round" style="mix-blend-mode:multiply"/>`;
+function hlPath(pts, sw, css, id) {
+  return `<path ${id ? `id="${id}" ` : ''}d="${strokePath(pts)}" stroke="${css}" stroke-width="${sw}" stroke-opacity="${MARKER.opacity}" fill="none" stroke-linecap="butt" stroke-linejoin="round" style="mix-blend-mode:multiply"/>`;
 }
 function drawOverlay(d, p) {
   const out = [];
@@ -591,14 +600,14 @@ function drawOverlay(d, p) {
   }
   for (const a of [...my.filter(a => a.hl), ...my.filter(a => !a.hl)]) {   // Markierstift liegt unter allem anderen
     const col = COLORS[a.color || 'blue'].css;
-    if (a.hl) out.push(hlPath(a.pts, a.sw));
+    if (a.hl) out.push(hlPath(a.pts, a.sw, markerColor(a).css));
     else if (a.type === 'mark') out.push(`<path d="${markPath(a)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
     else if (a.type === 'text' && a.text && state.editing?.annot !== a)
       out.push(`<text x="${a.x}" y="${a.base}" font-size="${a.size}" fill="${col}" font-family="Helvetica, Arial, sans-serif" style="white-space:pre">${esc(a.text)}</text>`);
     else if (a.type === 'ink') out.push(`<path d="${strokePath(a.pts)}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
     else if (a.type === 'sig') for (const st of a.strokes) out.push(`<path d="${strokePath(sigPts(a, st))}" stroke="${col}" stroke-width="${a.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
   }
-  if (p.live && p.live.hl) out.push(hlPath(p.live.pts, p.live.sw, 'live'));
+  if (p.live && p.live.hl) out.push(hlPath(p.live.pts, p.live.sw, MARKER_COLORS[state.hlColor].css, 'live'));
   else if (p.live) out.push(`<path id="live" d="${strokePath(p.live.pts)}" stroke="${COLORS[state.color].css}" stroke-width="${p.live.sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
   p.svg.innerHTML = out.join('');
 }
@@ -631,10 +640,13 @@ function updateUI() {
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === state.tool));
   $('#styleIcon').textContent = state.markStyle === 'x' ? '✕' : '✓';
   $('#styleLbl').textContent = state.markStyle === 'x' ? 'Zeichen: X' : 'Zeichen: ✓';
-  $('#swatch').style.background = COLORS[state.color].css; $('#colorLbl').textContent = COLORS[state.color].name;
+  // Der Farbknopf gilt im Marker-Werkzeug für die Markerfarbe, sonst für die Stiftfarbe
+  const mk = state.tool === 'hl', cc = mk ? MARKER_COLORS[state.hlColor] : COLORS[state.color];
+  $('#swatch').style.background = cc.css; $('#colorLbl').textContent = (mk ? 'Marker: ' : '') + cc.name;
+  $('#btnColor').title = mk ? 'Markerfarbe wechseln' : 'Stiftfarbe wechseln';
   document.body.classList.toggle('selmode', state.tool === 'select');
   if (state.tool !== 'select') $('#copyBtn').classList.remove('show');
-  const b = { hl: 'Markierstift: Mit dem Stift über die Wörter fahren. Gerade Striche werden automatisch begradigt.', select: 'Kopieren: Text mit Stift oder Maus markieren, dann „Text kopieren“ (oder Strg+C).', pen: 'Stift-Modus: Nur der Stift schreibt. Mit dem Finger kannst du weiterhin scrollen.', x: 'Frei-X: Tippe irgendwo hin, um ein X zu setzen.', text: 'Text: Tippe irgendwo hin, um freien Text zu schreiben.', erase: 'Radierer: Tippe auf einen Eintrag (oder streiche darüber), um ihn zu löschen.' }[state.tool];
+  const b = { hl: 'Markierstift: Mit dem Stift über die Wörter fahren. Farbe wählst du oben mit dem Farbknopf.', select: 'Kopieren: Text mit Stift oder Maus markieren, dann „Text kopieren“ (oder Strg+C).', pen: 'Stift-Modus: Nur der Stift schreibt. Mit dem Finger kannst du weiterhin scrollen.', x: 'Frei-X: Tippe irgendwo hin, um ein X zu setzen.', text: 'Text: Tippe irgendwo hin, um freien Text zu schreiben.', erase: 'Radierer: Tippe auf einen Eintrag (oder streiche darüber), um ihn zu löschen.' }[state.tool];
   banner(d && !state.pendingSig ? b : (state.pendingSig ? 'Tippe auf die Stelle, wo die Unterschrift hin soll.' : null));
 }
 
@@ -916,7 +928,7 @@ function endPointer(e, cancelled) {
       const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
       let pts = live.pts;
       if (y1 - y0 < 6 && x1 - x0 > 4) { const y = +(ys.reduce((u, v) => u + v, 0) / ys.length).toFixed(2); pts = [[x0, y], [x1, y]]; }
-      pushUndo(d); d.annots.push({ id: uid(), type: 'ink', hl: true, page: g.p.i, pts, sw: live.sw }); changed(d);
+      pushUndo(d); d.annots.push({ id: uid(), type: 'ink', hl: true, hlColor: state.hlColor, page: g.p.i, pts, sw: live.sw }); changed(d);
     }
     else if (!cancelled && !live.hl && live.pts.length) { pushUndo(d); d.annots.push({ id: uid(), type: 'ink', page: g.p.i, pts: live.pts, sw: live.sw, color: state.color }); changed(d); }
     else drawOverlay(d, g.p);
@@ -1060,7 +1072,7 @@ async function buildPdf(d) {
     if (a.hl) {
       // Markierstift: ein durchgehender, halbtransparenter Pfad (Multiplizieren → Text bleibt lesbar)
       const o = P(0, 0);
-      pg.drawSvgPath(strokePath(a.pts), { x: o.x, y: o.y, borderColor: rgb(...MARKER.rgb), borderWidth: a.sw, borderOpacity: MARKER.opacity, borderLineCap: LineCapStyle.Butt, blendMode: BlendMode.Multiply });
+      pg.drawSvgPath(strokePath(a.pts), { x: o.x, y: o.y, borderColor: rgb(...markerColor(a).rgb), borderWidth: a.sw, borderOpacity: MARKER.opacity, borderLineCap: LineCapStyle.Butt, blendMode: BlendMode.Multiply });
     } else if (a.type === 'mark') {
       const h = a.h, cx = a.cx, cy = a.cy;
       if (a.style === 'check') poly([[cx - h * 0.95, cy + h * 0.05], [cx - h * 0.3, cy + h * 0.75], [cx + h * 1.05, cy - h * 1.05]], a.sw);
@@ -1120,7 +1132,17 @@ $('#btnSave').onclick = saveDoc;
 $('#btnUndo').onclick = undo;
 $('#btnAll').onclick = checkAll;
 $('#btnStyle').onclick = () => { state.markStyle = state.markStyle === 'x' ? 'check' : 'x'; savePrefs(); updateUI(); toast(state.markStyle === 'x' ? 'Abhaken mit X' : 'Abhaken mit Haken ✓'); };
-$('#btnColor').onclick = () => { state.color = PEN_COLORS[(PEN_COLORS.indexOf(state.color) + 1) % PEN_COLORS.length]; savePrefs(); updateUI(); toast('Farbe: ' + COLORS[state.color].name, 1200); };
+$('#btnColor').onclick = () => {
+  if (state.tool === 'hl') {
+    const keys = Object.keys(MARKER_COLORS);
+    state.hlColor = keys[(keys.indexOf(state.hlColor) + 1) % keys.length];
+    toast('Markerfarbe: ' + MARKER_COLORS[state.hlColor].name, 1200);
+  } else {
+    state.color = PEN_COLORS[(PEN_COLORS.indexOf(state.color) + 1) % PEN_COLORS.length];
+    toast('Farbe: ' + COLORS[state.color].name, 1200);
+  }
+  savePrefs(); updateUI();
+};
 $('#zoomIn').onclick = () => { const d = doc(); if (d) setZoom(d, d.scale * 1.2); };
 $('#zoomOut').onclick = () => { const d = doc(); if (d) setZoom(d, d.scale / 1.2); };
 $('#zoomFit').onclick = () => { const d = doc(); if (d) fitZoom(d); };
