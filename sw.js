@@ -3,7 +3,7 @@
 // nach 3 Sekunden ohne Antwort die gespeicherte Kopie nehmen.
 // Nach Änderungen an den Dateien: VERSION um eins erhöhen.
 
-const VERSION = 'rapport-v7';
+const VERSION = 'rapport-v8';
 const DATEIEN = [
   './',
   './index.html',

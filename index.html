@@ -211,11 +211,11 @@ const MARKER = { opacity: 0.45, width: 11 };
 const MARKER_COLORS = {   // Leuchtfarben für den Markierstift
   yellow: { css: '#ffe100', rgb: [1, 0.88, 0], name: 'Gelb' },
   green:  { css: '#5ee04a', rgb: [0.37, 0.88, 0.29], name: 'Grün' },
-  pink:   { css: '#ff6fb5', rgb: [1, 0.435, 0.71], name: 'Pink' },
+  red:    { css: '#ff4040', rgb: [1, 0.25, 0.25], name: 'Rot' },
   orange: { css: '#ffa01e', rgb: [1, 0.627, 0.118], name: 'Orange' },
   cyan:   { css: '#4cc9ff', rgb: [0.3, 0.79, 1], name: 'Hellblau' },
 };
-const markerColor = a => MARKER_COLORS[a && a.hlColor] || MARKER_COLORS.yellow;
+const markerColor = a => MARKER_COLORS[a && (a.hlColor === 'pink' ? 'red' : a.hlColor)] || MARKER_COLORS.yellow;  // 'pink' gab es früher
 const isDrawTool = () => state.tool === 'pen' || state.tool === 'hl';
 const OPEN_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '☐', '□', '❏', '❑', '◻', '⬜', '', '', '', '', '']);
 const CIRCLE_GLYPHS = new Set(['o', '○', '◯', '❍', '⚪', '', '']);
