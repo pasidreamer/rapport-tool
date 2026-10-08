@@ -3,7 +3,7 @@
 // nach 3 Sekunden ohne Antwort die gespeicherte Kopie nehmen.
 // Nach Änderungen an den Dateien: VERSION um eins erhöhen.
 
-const VERSION = 'rapport-v8';
+const VERSION = 'rapport-v9';
 const DATEIEN = [
   './',
   './index.html',
@@ -17,7 +17,8 @@ const DATEIEN = [
 ];
 
 self.addEventListener('install', (ereignis) => {
-  ereignis.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(DATEIEN)));
+  // cache: 'reload' = am Browser-Zwischenspeicher vorbei direkt vom Server holen (GitHub erlaubt sonst 10 Min. alte Kopien)
+  ereignis.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(DATEIEN.map((d) => new Request(d, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -36,7 +37,8 @@ self.addEventListener('fetch', (ereignis) => {
     (async () => {
       const cache = await caches.open(VERSION);
       const gespeichert = await cache.match(anfrage, { ignoreSearch: true });
-      const ausDemNetz = fetch(anfrage).then((antwort) => {
+      // 'no-cache' = immer beim Server nachfragen, ob es eine neuere Fassung gibt
+      const ausDemNetz = fetch(anfrage, { cache: 'no-cache' }).then((antwort) => {
         if (antwort.ok) cache.put(anfrage, antwort.clone());
         return antwort;
       });
