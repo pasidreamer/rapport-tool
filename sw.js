@@ -3,7 +3,7 @@
 // nach 3 Sekunden ohne Antwort die gespeicherte Kopie nehmen.
 // Nach Änderungen an den Dateien: VERSION um eins erhöhen.
 
-const VERSION = 'rapport-v9';
+const VERSION = 'rapport-v10';
 const DATEIEN = [
   './',
   './index.html',
@@ -11,6 +11,19 @@ const DATEIEN = [
   './lib/pdf.min.js',
   './lib/pdf.worker.min.js',
   './lib/pdf-lib.min.js',
+  './lib/fontkit.umd.min.js',
+  './js/schrift.js',
+  './js/editor.js',
+  './js/objekte.js',
+  './js/speicher.js',
+  './fonts/Inter-Regular.ttf',
+  './fonts/Inter-Bold.ttf',
+  './fonts/Inter-Italic.ttf',
+  './fonts/Inter-BoldItalic.ttf',
+  './fonts/Roboto-Regular.ttf',
+  './fonts/Roboto-Bold.ttf',
+  './fonts/Roboto-Italic.ttf',
+  './fonts/Roboto-BoldItalic.ttf',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',

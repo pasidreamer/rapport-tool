@@ -1,3 +1,6 @@
 ﻿# Kunden-PDFs niemals hochladen
 *.pdf
 
+
+# Testergebnisse (Bilder) nicht hochladen
+tests/_ergebnis/
