@@ -108,13 +108,63 @@ try {
     const alt = await evaluate(`(() => {
       const d = doc(); const p = d.pages[0]; state.tool = 'tap';
       toggleMark(d, p, p.targets[2]);
-      editText(d, p, { field: d.fields.find(f => f.date) }); commitEdit();
+      feldBearbeiten(d, p, d.fields.find(f => f.date)); commitEdit();
       placeSig(d, p, { strokes: [[[0, 0.6], [0.3, 0], [0.6, 1], [1, 0.4]]], bw: 120, bh: 40, baseFrac: 0.9 }, null, p.sigTargets[0]);
       state.sel = null;
       const typen = {}; for (const a of d.annots) typen[a.type] = (typen[a.type] || 0) + 1;
-      return { typen, datum: (d.annots.find(a => a.type === 'text') || {}).text };
+      const datumFeld = d.annots.find(a => a.field && a.field === d.fields.find(f => f.date).id);
+      return { typen, datum: datumFeld && boxText(datumFeld) };
     })()`);
     pruefe("Bisherige Funktionen: Kreis, Datum (heute), Unterschrift", alt.typen.mark === 1 && alt.typen.sig === 1 && /^\d\d\.\d\d\.\d{4}$/.test(alt.datum || ""), alt);
+
+    // ---------- Erkannte Formularfelder: formatieren, Enter = nächstes Feld, einpassen, Blockschrift, alte Einträge ----------
+    const feldFmt = await evaluate(`(() => {
+      const d = doc(); const p = d.pages[0]; const kunde = d.fields.find(f => /^Kunde/.test(f.label));
+      feldBearbeiten(d, p, kunde);
+      const offen = !!editorEl() && $('#fmtBar').classList.contains('show');
+      document.execCommand('insertText', false, 'Muster AG, Kreuzlingen');
+      const n = editorEl().querySelector('div').firstChild; const t = n.nodeType === 3 ? n : n.firstChild;
+      const r = document.createRange(); r.setStart(t, 0); r.setEnd(t, 'Muster AG'.length); getSelection().removeAllRanges(); getSelection().addRange(r);
+      befehl('bold'); befehl('foreColor', TEXTFARBEN.red.css); groesseSetzen(13);
+      commitEdit();
+      const a = d.annots.find(x => x.field === kunde.id);
+      return { offen, typ: a.type, runs: a.paras[0].runs.map(x => ({ t: x.t, b: x.b, c: x.c, z: x.z })) };
+    })()`);
+    const mf = feldFmt.runs && feldFmt.runs.find((r) => r.t.includes("Muster AG"));
+    pruefe("Erkanntes Feld hat die Formatierleiste und lässt sich formatieren", feldFmt.offen && feldFmt.typ === "box" && mf && mf.b && mf.c === "red" && mf.z === 13
+      && feldFmt.runs.some((r) => r.t.includes("Kreuzlingen") && !r.b && r.c === "black"), feldFmt);
+
+    await evaluate(`(() => { const d = doc(); feldBearbeiten(d, d.pages[0], d.fields.find(f => /^Auftrag/.test(f.label))); })()`);
+    await tippe("622.01.C"); await taste("Enter", "Enter", 13);
+    const weiter = await evaluate(`(() => { const e = state.editing; const lbl = e && e.feld && e.feld.label; commitEdit();
+      const d = doc(); const a = d.annots.find(x => x.field === d.fields.find(f => /^Auftrag/.test(f.label)).id); return { naechstes: lbl, text: a && boxText(a) }; })()`);
+    pruefe("Enter im Feld springt ins nächste Feld", weiter.text === "622.01.C" && weiter.naechstes && !/^Auftrag/.test(weiter.naechstes), weiter);
+
+    const einpassen = await evaluate(`(() => {
+      const d = doc(); const p = d.pages[0]; const f = d.fields.find(f => /^Arbeitszeit/.test(f.label));
+      feldBearbeiten(d, p, f); document.execCommand('insertText', false, 'Montag 07:30 bis 12:00 und 13:00 bis 17:15, Dienstag 07:30 bis 11:45 inklusive Anfahrt aus Kreuzlingen und Materialbeschaffung');
+      commitEdit();
+      const a = d.annots.find(x => x.field === f.id); const L = satzBox(a);
+      const rechts = Math.max(...L.zeilen.map(z => { const l = z.items[z.items.length - 1]; return l ? l.x + l.w : 0; }));
+      return { k: a.k, zeilen: L.zeilen.length, passt: a.x + rechts <= f.x + f.w + 0.5, z: a.paras[0].runs[0].z };
+    })()`);
+    pruefe("Zu langer Feldtext wird auf eine Zeile eingepasst (gewählte Grösse bleibt gespeichert)", einpassen.k < 1 && einpassen.zeilen === 1 && einpassen.passt && einpassen.z >= 10, einpassen);
+
+    const block = await evaluate(`(() => {
+      const d = doc(); const p = d.pages[0]; const f = d.fields.find(f => f.upper);
+      feldBearbeiten(d, p, f); document.execCommand('insertText', false, 'pascal muster'); commitEdit();
+      return boxText(d.annots.find(x => x.field === f.id));
+    })()`);
+    pruefe("Blockschrift-Feld schreibt in Grossbuchstaben", block === "PASCAL MUSTER", block);
+
+    const altEintrag = await evaluate(`(() => {
+      const d = doc(); const p = d.pages[0]; const f = d.fields.find(f => !d.annots.some(a => a.field === f.id) && f.page === 0);
+      d.annots.push({ id: 'alt1', type: 'text', page: 0, field: f.id, x: f.x, base: f.base, size: f.size, w: f.w, text: 'Alter Eintrag', color: 'blue' });
+      feldBearbeiten(d, p, f); const offen = !!editorEl(); befehl('selectAll'); befehl('bold'); commitEdit();
+      const a = d.annots.find(x => x.id === 'alt1');
+      return { offen, typ: a.type, t: boxText(a), b: a.paras[0].runs[0].b, c: a.paras[0].runs[0].c };
+    })()`);
+    pruefe("Eintrag aus der alten Fassung wird beim Antippen formatierbar", altEintrag.offen && altEintrag.typ === "box" && altEintrag.t === "Alter Eintrag" && altEintrag.b === 1 && altEintrag.c === "blue", altEintrag);
 
     // ---------- Formen, Foto, Baustein ----------
     const ext = await evaluate(`(async () => {
@@ -197,7 +247,7 @@ try {
     await writeFile(join(AUS, "3_gespeichert_seite1.png"), Buffer.from(pdfInfo.bild.split(",")[1], "base64"));
     await writeFile(join(AUS, "4_gespeichert_seite2.png"), Buffer.from(pdfInfo.bild2.split(",")[1], "base64"));
     pruefe("Gespeicherte PDF: 2 Seiten, Seite 2 gedreht", pdfInfo.seiten === 2 && pdfInfo.rot2 === 90, { s: pdfInfo.seiten, r: pdfInfo.rot2 });
-    for (const w of ["Wartungsbericht", "Filter ersetzt", "Typ F7, beide Seiten", "Filter geprüft (F7)", "ERLEDIGT", "Material:", "3 Rollen"])
+    for (const w of ["Wartungsbericht", "Filter ersetzt", "Typ F7, beide Seiten", "Filter geprüft (F7)", "ERLEDIGT", "Material:", "3 Rollen", "Muster AG", ", Kreuzlingen", "622.01.C", "PASCAL MUSTER", "Montag 07:30 bis 12:00"])
       pruefe(`Text als echter Text in der PDF: „${w}“`, pdfInfo.t1.replace(/\s+/g, " ").includes(w), pdfInfo.t1.slice(0, 300));
     pruefe("Listenzeichen • und – in der PDF", pdfInfo.t1.includes("•") && pdfInfo.t1.includes("–"), "");
     pruefe("Text auf der Querseite (am Stück kopierbar)", pdfInfo.t2.includes("Notiz auf Querseite"), pdfInfo.t2);

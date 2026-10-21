@@ -32,6 +32,11 @@ hochgeladen.
   - **F**ett, *K*ursiv, Unterstrichen, Durchgestrichen, 6 Farben, Textmarker, Ausrichtung
   - Listen mit Punkten oder Nummern auf 2 Ebenen (Tab / Shift+Tab). Ein leerer Listenpunkt + Enter beendet die Liste (wie in Word).
   - Rahmen und Hintergrund, Einfügen, Kopieren, „★ Baustein“
+- **Erkannte Felder** („Datum: ____“, „Arbeitszeit:“, „Name Abnehmer“ …) haben dieselbe Formatierleiste:
+  - Enter/Tab springt ins nächste Feld, Shift+Tab ins vorige, Shift+Enter macht eine neue Zeile im Feld.
+  - Zu langer Text wird beim Abschliessen gleichmässig verkleinert, bis er auf die Linie passt (mindestens 6 pt). Die gewählte Grösse bleibt gespeichert.
+  - Einträge starten schwarz. „Datum“ wird mit heute vorbelegt, „Blockschrift“ in Grossbuchstaben.
+  - Einträge aus der früheren Fassung werden beim Antippen automatisch umgewandelt.
 - **Einfügen** von Text aus Outlook/Word: Zeilen werden Absätze, „• “, „- “, „1. “ werden zu Listen.
   Lange drücken im Textfeld zeigt wieder das Menü mit „Einfügen“ (vorher unterdrückt).
 - **Abdecken**: Feld über gedruckten Text ziehen → weisse Abdeckung, gleich darauf öffnet sich ein
@@ -103,7 +108,7 @@ App deshalb nicht diesen Ordner vor, sondern den zuletzt benutzten Speicherort.
 ## Automatischer Test
 
 `node tests/pruefen.mjs` startet ein unsichtbares Edge mit eigenem kleinen Webserver und lädt den
-Muster-Rapport. `node tests/muster_rapport.js` erzeugt ihn, mit erfundenen Daten. Geprüft werden 38 Punkte:
+Muster-Rapport. `node tests/muster_rapport.js` erzeugt ihn, mit erfundenen Daten. Geprüft werden 48 Punkte:
 - Textfelder, Listen, Formatieren, Einfügen
 - Abdecken (pixelgenau), Formen, Foto, Bausteine, Seiten, Rückgängig
 - die bisherigen Funktionen (Kreis, Datum, Unterschrift)

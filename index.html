@@ -66,9 +66,6 @@ body.selmode .textLayer { display: block; }
 .textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
 .textLayer ::selection { background: rgba(29, 78, 216, .32); }
 .page .pnum { position: absolute; top: -16px; right: 0; font-size: 11px; color: var(--muted); }
-.tin { position: absolute; border: 0; outline: 2px solid var(--accent); border-radius: 2px; background: rgba(255,255,255,.96);
-  font-family: Helvetica, Arial, sans-serif; padding: 0 2px; margin: 0; color: var(--ink); user-select: text; -webkit-user-select: text; touch-action: auto; }
-.tin.upper { text-transform: uppercase; }
 .selbox { position: absolute; border: 1.5px dashed var(--accent); pointer-events: none; }
 .selbox .h { position: absolute; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 3px solid #fff;
   box-shadow: 0 1px 4px rgba(0,0,0,.3); pointer-events: auto; }
@@ -116,6 +113,8 @@ body.hasdoc #empty { display: none; }
   line-height: 1.28; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; touch-action: auto;
   user-select: text; -webkit-user-select: text; box-sizing: border-box; }
 .rte > div { position: relative; min-height: 1em; }
+.rte.feld { white-space: pre; }            /* erkanntes Feld: eine Zeile, wird beim Abschliessen eingepasst */
+.rte.upper { text-transform: uppercase; }  /* „Blockschrift“ */
 .rte > div[data-list][data-level="0"] { padding-left: calc(13px * var(--s)); }
 .rte > div[data-list][data-level="1"] { padding-left: calc(26px * var(--s)); }
 .rte > div[data-mark]::before { content: attr(data-mark); position: absolute; font-style: normal; text-decoration: none; }
@@ -687,14 +686,14 @@ function drawOverlay(d, p) {
   const out = [];
   const my = d.annots.filter(a => a.page === p.i);
   const marked = new Set(my.filter(a => a.type === 'mark' && a.target).map(a => a.target));
-  const filled = new Set(my.filter(a => a.type === 'text' && a.field && a.text).map(a => a.field));
+  const filled = new Set(my.filter(a => a.field && (a.type === 'text' ? a.text : a.type === 'box' && !boxLeer(a))).map(a => a.field));
   const signed = new Set(my.filter(a => a.type === 'sig' && a.target).map(a => a.target));
   const showHints = state.tool === 'tap' || state.tool === 'text';
   // Hinweise (werden nicht gespeichert)
   if (showHints) {
     for (const t of p.targets) if (!t.pre && !marked.has(t.id))
       out.push(`<circle cx="${t.cx}" cy="${t.cy}" r="${t.r + 2.6}" fill="rgba(29,78,216,.07)" stroke="rgba(29,78,216,.45)" stroke-width=".7"/>`);
-    for (const f of p.fields) if (!filled.has(f.id) && state.editing?.fieldId !== f.id)
+    for (const f of p.fields) if (!filled.has(f.id) && state.editing?.annot?.field !== f.id)
       out.push(`<rect x="${f.x - 1}" y="${f.base - f.size * 1.05}" width="${f.w}" height="${f.size * 1.4}" rx="1.5" fill="rgba(29,78,216,.06)" stroke="rgba(29,78,216,.35)" stroke-width=".5" stroke-dasharray="2 1.5"/>`);
     for (const s of p.sigTargets) if (!signed.has(s.id))
       out.push(`<rect x="${s.x}" y="${s.lineY - 34}" width="${s.w}" height="36" rx="3" fill="rgba(250,190,20,.13)" stroke="rgba(200,140,0,.5)" stroke-width=".6" stroke-dasharray="3 2"/>` +
@@ -783,67 +782,31 @@ for (const t of ['mousedown', 'mouseup', 'click'])
     const ed = state.editing;
     if (ed && performance.now() - ed.born < 1000 && !ed.input.contains(e.target) && !e.target.closest('#fmtBar, .fmtPop')) { e.preventDefault(); e.stopPropagation(); if (document.activeElement !== ed.input) ed.input.focus(); }
   }, true);
-function editText(d, p, opts) {
-  commitEdit();
-  let a = opts.annot;
-  const f = opts.field || (a && a.field && p.fields.find(x => x.id === a.field));
-  if (!a && f) a = d.annots.find(x => x.type === 'text' && x.field === f.id);
-  const isNew = !a;
-  const before = schnapp(d);
-  if (!a) {
-    a = f ? { id: uid(), type: 'text', page: p.i, field: f.id, x: f.x, base: f.base, size: f.size, w: f.w, text: '', color: state.color, upper: f.upper }
-          : { id: uid(), type: 'text', page: p.i, field: null, x: opts.x, base: opts.y + 4, size: 11, w: null, text: '', color: state.color };
-    d.annots.push(a);
-  }
-  const baseSize = f ? f.size : 11;
-  const s = d.scale;
-  const inp = document.createElement('input');
-  inp.className = 'tin' + (a.upper ? ' upper' : ''); inp.type = 'text'; inp.spellcheck = false; inp.autocomplete = 'off';
-  inp.value = a.text || (f && f.date ? today() : '');
-  const place = () => {
-    const w = f ? f.w : Math.max(160, textWidth(inp.value, baseSize) + 30);
-    Object.assign(inp.style, { left: (a.x - 2) * s + 'px', top: (a.base - baseSize * 1.08) * s + 'px', width: (w + 4) * s + 'px',
-      height: baseSize * 1.45 * s + 'px', fontSize: baseSize * s + 'px', color: COLORS[a.color].css });
-  };
-  place();
-  inp.placeholder = f ? f.label : 'Text';
-  p.el.appendChild(inp);
-  state.editing = { d, p, annot: a, fieldId: f && f.id, input: inp, before, isNew, f, baseSize, born: performance.now() };
-  drawOverlay(d, p);
-  inp.addEventListener('input', () => { if (!f) place(); });
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); const cur = f; commitEdit(); if (cur) gotoNextField(d, cur, 1); }
-    else if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); const cur = f; commitEdit(); if (cur) gotoNextField(d, cur, -1); }
-    else if (e.key === 'Escape') { e.preventDefault(); commitEdit(); }
-  });
-  // Touch: Nach dem Antippen feuern noch Maus-/Klick-Ereignisse und klauen den Fokus -> Bildschirmtastatur ging sofort wieder zu.
-  // Darum: in den ersten 700 ms Fokus zurückholen statt das Feld zu schliessen.
-  const born = performance.now();
-  inp.inputMode = 'text'; inp.enterKeyHint = 'next';
-  const refocus = () => { if (state.editing && state.editing.input === inp && document.activeElement !== inp) { inp.focus(); const L = inp.value.length; try { inp.setSelectionRange(L, L); } catch (_) {} } };
-  inp.addEventListener('blur', () => {
-    if (performance.now() - born < 700) { setTimeout(refocus, 0); return; }
-    setTimeout(() => { if (state.editing && state.editing.input === inp) commitEdit(); }, 0);
-  });
-  inp.addEventListener('pointerdown', e => e.stopPropagation());
-  inp.focus();
-  for (const ms of [0, 60, 200, 450]) setTimeout(refocus, ms);
+// Erkannte Felder („Datum: ____“, „Arbeitszeit:“ …) laufen über denselben Editor wie freie Textfelder –
+// mit Formatierleiste. Enter springt wie früher ins nächste Feld, zu langer Text wird kleiner (siehe boxAbschliessen).
+function feldBearbeiten(d, p, f) {
+  let a = d.annots.find(x => (x.type === 'box' || x.type === 'text') && x.field === f.id);
+  if (a && a.type === 'text') a = textZuBox(d, a);
+  boxBearbeiten(d, p, a || feldBox(p, f));
+}
+function feldBox(p, f) {
+  const st = { ...STIL_VORGABE, f: (state.textStil && state.textStil.f) || 'helv', z: f.size, c: 'black' };
+  return { id: uid(), type: 'box', page: p.i, field: f.id, upper: !!f.upper, x: f.x - SATZ.pad, y: f.base - f.size * SATZ.grund - SATZ.pad,
+           w: f.w + 2 * SATZ.pad, rahmen: null, fuellung: null,
+           paras: [{ list: null, level: 0, align: 'left', runs: [{ ...st, t: f.date ? today() : '' }] }] };
+}
+// Einträge aus der früheren Fassung (einzeiliges Feld oder freier Text) in ein Textfeld umwandeln
+function textZuBox(d, a) {
+  const z = a.size || 11, f = a.field && d.fields.find(x => x.id === a.field);
+  const b = { id: a.id, type: 'box', page: a.page, field: a.field || null, upper: !!a.upper, x: a.x - SATZ.pad, y: a.base - z * SATZ.grund - SATZ.pad,
+              w: (f ? f.w : Math.max(60, textWidth(a.text, z) + 12)) + 2 * SATZ.pad, rahmen: null, fuellung: null,
+              paras: [{ list: null, level: 0, align: 'left', runs: [{ ...STIL_VORGABE, z, c: TEXTFARBEN[a.color] ? a.color : 'black', t: a.text || '' }] }] };
+  d.annots[d.annots.indexOf(a)] = b;
+  return b;
 }
 function commitEdit() {
   const e = state.editing; if (!e) return;
-  if (e.kind === 'box') { boxAbschliessen(e); return; }
-  state.editing = null;
-  const { d, p, annot: a, input, before, f, baseSize } = e;
-  let text = input.value.replace(/\s+$/, '');
-  if (a.upper) text = text.toUpperCase();
-  input.remove();
-  a.text = text;
-  // Schrift verkleinern, wenn der Text nicht ins Feld passt
-  a.size = baseSize;
-  if (f) while (a.size > 6 && textWidth(text, a.size) > f.w) a.size -= 0.25;
-  if (!text) d.annots.splice(d.annots.indexOf(a), 1);
-  if (schnapp(d) !== before) { d.undo.push(before); changed(d); }
-  else drawOverlay(d, p);
+  boxAbschliessen(e);
 }
 function gotoNextField(d, cur, dir) {
   const all = d.fields; const i = all.indexOf(cur);
@@ -852,7 +815,7 @@ function gotoNextField(d, cur, dir) {
   const r = p.el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
   const y = r.top + nf.base * d.scale;
   if (y < vr.top + 60 || y > vr.bottom - 100) viewer.scrollTop += y - (vr.top + vr.height / 3);
-  editText(d, p, { field: nf });
+  feldBearbeiten(d, p, nf);
 }
 
 /* ---------- Radierer ---------- */
@@ -895,7 +858,7 @@ function handleTap(d, p, x, y, pointerType, punkt) {
   if (isDrawTool() || state.tool === 'select' || state.tool === 'form') return;
   // Vorhandene Einträge
   const hit = hitAnnot(d, p, x, y, pointerType === 'touch' ? 6 : 3);
-  if (hit && hit.type === 'text') { editText(d, p, { annot: hit }); return; }
+  if (hit && hit.type === 'text') { boxBearbeiten(d, p, textZuBox(d, hit), { punkt }); return; }
   if (hit && hit.type === 'box') { boxBearbeiten(d, p, hit, { punkt }); return; }
   if (hit && BEWEGBAR.has(hit.type)) { state.sel = hit.id; redrawAll(d); return; }
   if (state.sel) { state.sel = null; redrawAll(d); }
@@ -914,7 +877,7 @@ function handleTap(d, p, x, y, pointerType, punkt) {
   if (sg && state.tool === 'tap') { openSigPad(sg); return; }
   // Textfeld
   const f = p.fields.find(f => x > f.x - 6 && x < f.x + f.w + 6 && y > f.base - f.size * 1.3 - 4 && y < f.base + 7);
-  if (f) { editText(d, p, { field: f }); return; }
+  if (f) { feldBearbeiten(d, p, f); return; }
   if (state.tool === 'text') { boxBearbeiten(d, p, boxNeu(p, x, y)); return; }
 }
 
@@ -942,11 +905,11 @@ function touchMayDraw() { return !state.penSeen; } // Finger zeichnen nur, wenn 
 document.addEventListener('pointermove', e => { if (e.pointerType === 'pen') { state.penSeen = true; state.lastPen = performance.now(); } }, true);
 document.addEventListener('pointerover', e => { if (e.pointerType === 'pen') { state.penSeen = true; state.lastPen = performance.now(); } }, true);
 // Langes Drücken: im Dokument kein Kontextmenü – ausser in Eingabefeldern (dort braucht man „Einfügen“)
-viewer.addEventListener('contextmenu', e => { if (!e.target.closest('.tin, .rte')) e.preventDefault(); });
+viewer.addEventListener('contextmenu', e => { if (!e.target.closest('.rte')) e.preventDefault(); });
 
 viewer.addEventListener('pointerdown', e => {
   const d = doc(); if (!d) return;
-  if (e.target.closest('.tin, .rte, .seitenwz')) return;
+  if (e.target.closest('.rte, .seitenwz')) return;
   if (e.pointerType === 'pen') { state.penSeen = true; state.penDown = true; state.lastPen = performance.now(); }
   if (e.pointerType === 'touch') {
     if (isPalm(e) || gesture) { ignored.add(e.pointerId); return; }

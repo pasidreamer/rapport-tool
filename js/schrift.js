@@ -111,16 +111,17 @@ function satzBox(a) {
   const W = Math.max(20, a.w - 2 * SATZ.pad);
   const zeilen = []; let y = SATZ.pad;
   const marken = listenMarken(a.paras);
+  const faktor = a.k || 1;   // Formularfeld: eingepasst (siehe feldEinpassen)
   a.paras.forEach((p, k) => {
     const erster = p.runs.find(r => r.t) || p.runs[0] || STIL_VORGABE;
-    const zBasis = erster.z || 11;
+    const zBasis = (erster.z || 11) * faktor;
     const einzug = p.list ? SATZ.einzug * (zBasis / 11) * ((p.level ? 1 : 0) + 1) : 0;
     const markeX = p.list ? einzug - SATZ.einzug * (zBasis / 11) : 0;
     const frei = Math.max(10, W - einzug);
     // Wörter bilden: ein Wort darf aus mehreren Stücken bestehen (z. B. halb fett), Leerzeichen trennen
     const woerter = []; let wort = null;
     for (const r of p.runs) {
-      const st = { ...STIL_VORGABE, ...r };
+      const st = { ...STIL_VORGABE, ...r, z: (r.z || 11) * faktor };
       for (const teil of r.t.match(/\s+|[^\s]+/g) || []) {
         if (/^\s+$/.test(teil)) { wort = null; woerter.push({ leer: true, stuecke: [{ t: teil.replace(/\s/g, ' '), st, w: breite(st, teil.replace(/\s/g, ' ')) }] }); }
         else { if (!wort) { wort = { leer: false, stuecke: [] }; woerter.push(wort); } wort.stuecke.push({ t: teil, st, w: breite(st, teil) }); }
@@ -160,7 +161,7 @@ function satzBox(a) {
       }
       const zeile = { base, items, h: zmax * SATZ.zeile };
       if (zi === 0 && marken[k]) {
-        const mst = { ...STIL_VORGABE, ...erster, u: 0, s: 0, m: null, b: erster.b, i: 0 };
+        const mst = { ...STIL_VORGABE, ...erster, z: zBasis, u: 0, s: 0, m: null, b: erster.b, i: 0 };
         zeile.marke = { t: marken[k], st: mst, x: SATZ.pad + markeX + (p.list === 'num' ? 0 : SATZ.einzug * (zBasis / 11) * 0.15) };
       }
       zeilen.push(zeile);

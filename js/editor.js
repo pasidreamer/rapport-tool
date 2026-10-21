@@ -31,9 +31,13 @@ function boxBearbeiten(d, p, a, opts = {}) {
   Object.assign(el.style, { left: a.x * s + 'px', top: a.y * s + 'px', width: a.w * s + 'px', padding: SATZ.pad * s + 'px' });
   if (a.fuellung && FUELLUNGEN[a.fuellung]) el.style.background = FUELLUNGEN[a.fuellung].css;
   if (a.rahmen) el.style.boxShadow = `inset 0 0 0 ${Math.max(1, 0.8 * s)}px ${(TEXTFARBEN[a.rahmen] || TEXTFARBEN.black).css}`;
+  // Erkanntes Formularfeld: Text bleibt beim Tippen auf einer Zeile, Enter springt ins nächste Feld
+  const feld = a.field ? d.fields.find(f => f.id === a.field) || null : null;
+  if (feld) { el.classList.add('feld'); el.style.width = 'auto'; el.style.minWidth = a.w * s + 'px'; el.enterKeyHint = 'next'; }
+  if (a.upper) el.classList.add('upper');
   editorFuellen(el, a.paras, s);
   p.el.appendChild(el);
-  state.editing = { kind: 'box', d, p, annot: a, input: el, before: schnapp(d), isNew: neu, born: performance.now() };
+  state.editing = { kind: 'box', d, p, annot: a, input: el, feld, before: schnapp(d), isNew: neu, born: performance.now() };
   state.sel = null; drawSelection(d);
   drawOverlay(d, p);
   try { document.execCommand('defaultParagraphSeparator', false, 'div'); } catch (e) {}
@@ -170,14 +174,30 @@ function boxAbschliessen(e) {
   const { d, p, annot: a, input: el, before, isNew } = e;
   a.paras = editorLesen(el, d.scale);
   el.remove(); leisteVerstecken();
+  if (a.upper) for (const pp of a.paras) for (const r of pp.runs) r.t = r.t.toUpperCase();
+  if (a.field) feldEinpassen(a);
   const leer = boxLeer(a);
   if (leer && !isNew) d.annots.splice(d.annots.indexOf(a), 1);
   if (!leer && isNew) d.annots.push(a);
-  if (!leer) {   // Stil fürs nächste Textfeld merken
+  if (!leer && !a.field) {   // Stil fürs nächste freie Textfeld merken
     const r = [...a.paras].reverse().flatMap(pp => [...pp.runs].reverse()).find(x => x.t.trim());
     if (r) { state.textStil = { f: r.f, z: r.z, b: 0, i: 0, u: 0, s: 0, c: r.c, m: null }; savePrefs(); }
   }
   if (schnapp(d) !== before) { d.undo.push(before); changed(d); } else drawOverlay(d, p);
+}
+
+// Formularfeld: Passt die längste Zeile nicht auf die Linie, alles gleichmässig verkleinern (bis 6 pt).
+// Die gewählten Grössen bleiben gespeichert, a.k ist nur der Faktor fürs Anzeigen und Speichern.
+function feldEinpassen(a) {
+  delete a.k;
+  const frei = a.w - 2 * SATZ.pad;
+  let breitest = 0, zmax = 0;
+  for (const p of a.paras) {
+    const einzug = p.list ? SATZ.einzug * ((p.level ? 1 : 0) + 1) : 0;
+    breitest = Math.max(breitest, einzug + p.runs.reduce((s, r) => s + breite({ ...STIL_VORGABE, ...r }, r.t), 0));
+    for (const r of p.runs) zmax = Math.max(zmax, r.z || 11);
+  }
+  if (breitest > frei && zmax) a.k = Math.max(6 / zmax, frei / breitest * 0.995);
 }
 
 /* ---------- Tasten ---------- */
@@ -190,6 +210,13 @@ function aktuellerAbsatz(el) {
 function tasteImEditor(e) {
   const el = e.currentTarget;
   if (e.key === 'Escape') { e.preventDefault(); commitEdit(); return; }
+  // Formularfeld: Enter/Tab = nächstes Feld, Shift+Tab = voriges, Shift+Enter = neue Zeile im Feld
+  const feld = state.editing && state.editing.feld;
+  if (feld && ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab')) {
+    e.preventDefault();
+    const d = state.editing.d; commitEdit(); gotoNextField(d, feld, e.key === 'Tab' && e.shiftKey ? -1 : 1);
+    return;
+  }
   if (e.key === 'Tab') { e.preventDefault(); einruecken(e.shiftKey ? -1 : 1); return; }
   if (e.key === 'Enter') {
     const div = aktuellerAbsatz(el);
